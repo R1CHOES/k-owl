@@ -23,6 +23,8 @@ model Agency {
   description String?
   address     String?
   website     String?
+  bannerUrl   String?  
+  logoUrl     String?  
   
   users       User[]
 }
