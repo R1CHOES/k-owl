@@ -119,6 +119,7 @@ model Content {
   dateProcessed         DateTime?
   datePosted            DateTime?
   status                String?
+  dynamicMetadata  Json?    // This magic column will hold ALL unpredictable AI data!
 
   versions  ContentVersion[]
   createdAt DateTime         @default(now())
