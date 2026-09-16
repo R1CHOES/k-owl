@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  roleName    String   // e.g., "Super Administrator"
+  slug        String   @unique // e.g., "super-admin" (used in code logic)
+  description String?
+  isActive    Boolean  @default(true) // For soft-deleting roles in the future
+  
+  users       User[]
+}
+
+model Agency {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // e.g., "STII", "ITDI"
+  description String?
+  address     String?
+  website     String?
+  
+  users       User[]
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String   // We will encrypt passwords using bcrypt
+  designation  String?  // e.g., "Senior Science Research Specialist"
+  isActive     Boolean  @default(true) // "Soft delete" so we don't break old documents
+  
+  // Relationships
+  roleId       Int
+  role         Role     @relation(fields: [roleId], references: [id])
+  
+  agencyId     Int
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
