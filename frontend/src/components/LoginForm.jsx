@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
+import { jwtDecode } from 'jwt-decode';
 
 const LoginForm = ({ secondaryCyan }) => {
+    const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
@@ -21,8 +24,13 @@ const LoginForm = ({ secondaryCyan }) => {
                 text: 'Welcome back to K-OWL!',
                 confirmButtonColor: secondaryCyan
             }).then(() => {
-                // Here you would redirect the user or update global auth state
-                console.log("Redirecting...");
+                const decoded = jwtDecode(res.data.token);
+                if (decoded.roleSlug === 'super-admin') {
+                    navigate('/dashboard');
+                } else {
+                    // For now, redirect others somewhere else or show message
+                    Swal.fire('Notice', 'You are logged in, but not as Super Admin. Routing for this role is under construction.', 'info');
+                }
             });
 
         } catch (error) {
