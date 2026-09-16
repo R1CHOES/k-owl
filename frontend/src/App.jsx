@@ -6,7 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import ManageUsers from './pages/ManageUsers';
 import ManageAgencies from './pages/ManageAgencies';
 import DashboardOverview from './pages/DashboardOverview';
-
+import ManageDocuments from './pages/ManageDocuments';
 
 // MAIN APP COMPONENT & ROUTING
 // ==========================================
@@ -31,6 +31,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           
           <Route path="dashboard" element={<DashboardOverview />} />
+          <Route path="documents" element={<ManageDocuments />} />
           <Route path="users" element={<ManageUsers />} />
           <Route path="agencies" element={<ManageAgencies />} />
         </Route>

@@ -8,42 +8,145 @@ datasource db {
 }
 
 model Role {
-  id          Int      @id @default(autoincrement())
-  roleName    String   // e.g., "Super Administrator"
-  slug        String   @unique // e.g., "super-admin" (used in code logic)
+  id          Int     @id @default(autoincrement())
+  roleName    String // e.g., "Super Administrator"
+  slug        String  @unique // e.g., "super-admin" (used in code logic)
   description String?
-  isActive    Boolean  @default(true) // For soft-deleting roles in the future
-  
-  users       User[]
+  isActive    Boolean @default(true) // For soft-deleting roles in the future
+
+  users User[]
 }
 
 model Agency {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique // e.g., "STII", "ITDI"
+  id          Int     @id @default(autoincrement())
+  name        String  @unique // e.g., "STII", "ITDI"
   description String?
   address     String?
   website     String?
-  bannerUrl   String?  
-  logoUrl     String?  
-  
-  users       User[]
+  bannerUrl   String?
+  logoUrl     String?
+
+  users    User[]
+  Document Document[]
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  email        String   @unique
-  passwordHash String   // We will encrypt passwords using bcrypt
-  designation  String?  // e.g., "Senior Science Research Specialist"
-  isActive     Boolean  @default(true) // "Soft delete" so we don't break old documents
-  
+  id           Int     @id @default(autoincrement())
+  username     String  @unique
+  email        String  @unique
+  passwordHash String // We will encrypt passwords using bcrypt
+  designation  String? // e.g., "Senior Science Research Specialist"
+  isActive     Boolean @default(true) // "Soft delete" so we don't break old documents
+
   // Relationships
-  roleId       Int
-  role         Role     @relation(fields: [roleId], references: [id])
-  
-  agencyId     Int
-  agency       Agency   @relation(fields: [agencyId], references: [id])
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  roleId Int
+  role   Role @relation(fields: [roleId], references: [id])
+
+  agencyId Int
+  agency   Agency @relation(fields: [agencyId], references: [id])
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  Document        Document[]
+  DocumentVersion DocumentVersion[]
+  ContentVersion  ContentVersion[]
+}
+
+enum DocumentStatus {
+  PENDING_EXTRACTION
+  DRAFT
+  IN_QA
+  APPROVED
+  PUBLISHED
+  REJECTED
+}
+
+// 1. The Logical Parent File
+model Document {
+  id       Int    @id @default(autoincrement())
+  agencyId Int
+  agency   Agency @relation(fields: [agencyId], references: [id])
+
+  status DocumentStatus @default(PENDING_EXTRACTION)
+  isArchived Boolean @default(false)
+
+  versions  DocumentVersion[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  User      User?             @relation(fields: [userId], references: [id])
+  userId    Int?
+}
+
+// 2. The Physical Uploaded Files
+model DocumentVersion {
+  id            Int @id @default(autoincrement())
+  versionNumber Int @default(1)
+
+  documentId Int
+  document   Document @relation(fields: [documentId], references: [id])
+
+  filename      String
+  filePath      String
+  fileSizeBytes Int
+  mimeType      String
+  fileHash      String @unique
+
+  uploaderId Int
+  uploader   User @relation(fields: [uploaderId], references: [id])
+
+  // 1-to-1 relation: Each uploaded file generates one Content record
+  content Content?
+
+  createdAt DateTime @default(now())
+}
+
+// 3. The System-Generated Data (Your CMS Fields)
+model Content {
+  id Int @id @default(autoincrement())
+
+  documentVersionId Int             @unique
+  documentVersion   DocumentVersion @relation(fields: [documentVersionId], references: [id])
+
+  title           String?
+  type            String?
+  referenceCode   String?
+  keywords        String?
+  descriptionText String? @db.Text
+  sourceUrl       String?
+  socmedCardPath  String?
+
+  languageCheckerStatus String?
+  dateProcessed         DateTime?
+  datePosted            DateTime?
+  status                String?
+
+  versions  ContentVersion[]
+  createdAt DateTime         @default(now())
+}
+
+// 4. The Human-Edited Revisions
+model ContentVersion {
+  id            Int @id @default(autoincrement())
+  versionNumber Int @default(1)
+
+  contentId Int
+  content   Content @relation(fields: [contentId], references: [id])
+
+  // A snapshot of all the CMS fields after a human edits them
+  title           String?
+  type            String?
+  referenceCode   String?
+  keywords        String?
+  descriptionText String? @db.Text
+  sourceUrl       String?
+  socmedCardPath  String?
+
+  languageCheckerStatus String?
+  dateProcessed         DateTime?
+  datePosted            DateTime?
+
+  editorId Int
+  editor   User @relation(fields: [editorId], references: [id])
+
+  createdAt DateTime @default(now()) // "edited at"
 }
