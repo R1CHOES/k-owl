@@ -5,18 +5,9 @@ import AdminLayout from './layouts/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import ManageUsers from './pages/ManageUsers';
 import ManageAgencies from './pages/ManageAgencies';
+import DashboardOverview from './pages/DashboardOverview';
 
-// ==========================================
-// DUMMY PLACEHOLDER PAGES
-// ==========================================
-const DashboardOverview = () => (
-  <div className="p-8 bg-white rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
-    <h2 className="text-3xl font-bold text-gray-800 mb-2">Dashboard Overview</h2>
-    <p className="text-gray-500">Welcome to the K-OWL Super Admin Dashboard.</p>
-  </div>
-);
 
-// ==========================================
 // MAIN APP COMPONENT & ROUTING
 // ==========================================
 function App() {

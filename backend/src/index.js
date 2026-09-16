@@ -6,6 +6,7 @@ const authRoutes = require('./routes/authRoutes');
 const metadataRoutes = require('./routes/metadataRoutes');
 const userRoutes = require('./routes/userRoutes');
 const agencyRoutes = require('./routes/agencyRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', metadataRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/agencies', agencyRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Basic test route
 app.get('/', (req, res) => {
