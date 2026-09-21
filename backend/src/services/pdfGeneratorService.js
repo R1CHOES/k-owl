@@ -48,11 +48,11 @@ const generateCleanPDF = async (versionId, contentData) => {
                             const titleKey = formatKeyToTitleCase(key);
                             const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
                             
-                            tableRows.push([
-                                String(clusterName).toUpperCase(), // Cluster column
-                                titleKey,                          // Key column
-                                displayValue                       // Complete Data column
-                            ]);
+                            tableRows.push({
+                                cluster: String(clusterName).toUpperCase(),
+                                key: titleKey,
+                                details: displayValue
+                            });
                         }
                     }
                 }
@@ -63,8 +63,10 @@ const generateCleanPDF = async (versionId, contentData) => {
                         { label: "Key / Section", property: "key", width: 120 },
                         { label: "Complete Details", property: "details", width: 520 } // Wide column for the long text
                     ],
-                    rows: tableRows
+                    datas: tableRows
                 };
+                
+                console.log(`Generating PDF with ${tableRows.length} rows...`);
 
                 await doc.table(table, {
                     prepareHeader: () => doc.font("Helvetica-Bold").fontSize(10),

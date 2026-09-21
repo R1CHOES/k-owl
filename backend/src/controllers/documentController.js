@@ -3,6 +3,7 @@ const prisma = new PrismaClient();
 const crypto = require('crypto');
 const fs = require('fs');
 const contentExtractionService = require('../services/contentExtractionService');
+const convertapi = require('convertapi')(process.env.CONVERT_API_SECRET);
 
 /**
  * Handles document upload, deduplication, and database entry creation.
@@ -20,14 +21,42 @@ const uploadDocument = async (req, res) => {
             return res.status(400).json({ error: 'agencyId is required' });
         }
 
+        // 0. Convert Word documents to PDF
+        if (req.file.mimetype === 'application/msword' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+            try {
+                console.log(`Starting conversion for ${req.file.originalname}...`);
+                const fileExt = req.file.originalname.split('.').pop().toLowerCase();
+                const result = await convertapi.convert('pdf', { File: req.file.path }, fileExt);
+                const convertedFilePath = req.file.path + ".pdf";
+                await result.file.save(convertedFilePath);
+
+                fs.unlinkSync(req.file.path); // Delete the original .docx file
+
+                // Override req.file variables
+                req.file.path = convertedFilePath;
+                req.file.mimetype = 'application/pdf';
+                req.file.originalname = req.file.originalname.replace(/\.[^/.]+$/, "") + ".pdf";
+
+                // Update file size property
+                const stats = fs.statSync(req.file.path);
+                req.file.size = stats.size;
+
+                console.log(`Successfully converted to PDF: ${req.file.originalname}`);
+            } catch (conversionError) {
+                console.error('Document conversion failed:', conversionError);
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                return res.status(500).json({ error: 'Document conversion failed. Please try again.' });
+            }
+        }
+
         // 1. Generate SHA-256 hash of the file to prevent duplicates
         const fileBuffer = fs.readFileSync(req.file.path);
         const hashSum = crypto.createHash('sha256');
         hashSum.update(fileBuffer);
         const fileHash = hashSum.digest('hex');
 
-        // 2. Check if a DocumentVersion with this hash already exists
-        const existingVersion = await prisma.documentVersion.findUnique({
+        // 2. Check if a DocumentVersion with this hash already exists (ignore archived)
+        const existingVersion = await prisma.documentVersion.findFirst({
             where: { fileHash },
             include: { document: true }
         });
@@ -41,7 +70,7 @@ const uploadDocument = async (req, res) => {
                     include: { versions: true }
                 });
                 fs.unlinkSync(req.file.path); // clean up duplicate uploaded file
-                
+
                 // Hook into the CMS Pipeline for restored document to ensure PDF is generated
                 try {
                     await contentExtractionService.extractAndOrganize(existingVersion.id);
@@ -72,7 +101,7 @@ const uploadDocument = async (req, res) => {
                         mimeType: req.file.mimetype,
                         fileSizeBytes: req.file.size,
                         fileHash: fileHash,
-                        uploaderId: req.user.userId 
+                        uploaderId: req.user.userId
                     }
                 }
             },
@@ -80,16 +109,10 @@ const uploadDocument = async (req, res) => {
         });
 
         // 4. Hook into the CMS Pipeline: Automated Content Extraction
-        try {
-            if (newDocument.versions && newDocument.versions.length > 0) {
-                const newVersionId = newDocument.versions[0].id;
-                // Await the extraction as requested, but catch errors to prevent upload failure
-                await contentExtractionService.extractAndOrganize(newVersionId);
-            }
-        } catch (extractionError) {
+        // We DO NOT await this. It runs in the background so the frontend doesn't hang!
+        contentExtractionService.extractAndOrganize(newDocument.versions[0].id).catch(extractionError => {
             console.error('Extraction Pipeline failed for newly uploaded document:', extractionError);
-            // We DO NOT throw here. The upload was successful, just the extraction failed/pending.
-        }
+        });
 
         res.status(201).json(newDocument);
 
@@ -115,13 +138,13 @@ const getAllDocuments = async (req, res) => {
 
         const documents = await prisma.document.findMany({
             where: whereClause,
-            include: { 
-                agency: true, 
-                versions: { 
-                    include: { uploader: true, content: true }, 
-                    orderBy: { versionNumber: 'desc' }, 
-                    take: 1 
-                } 
+            include: {
+                agency: true,
+                versions: {
+                    include: { uploader: true, content: true },
+                    orderBy: { versionNumber: 'desc' },
+                    take: 1
+                }
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -148,21 +171,58 @@ const updateDocument = async (req, res) => {
 
         if (req.file) {
             // New file uploaded for replacement
+            if (req.file.mimetype === 'application/msword' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                try {
+                    console.log(`Starting conversion for ${req.file.originalname}...`);
+                    const fileExt = req.file.originalname.split('.').pop().toLowerCase();
+                    const result = await convertapi.convert('pdf', { File: req.file.path }, fileExt);
+                    const convertedFilePath = req.file.path + ".pdf";
+                    await result.file.save(convertedFilePath);
+
+                    fs.unlinkSync(req.file.path); // Delete the original .docx file
+
+                    // Override req.file variables
+                    req.file.path = convertedFilePath;
+                    req.file.mimetype = 'application/pdf';
+                    req.file.originalname = req.file.originalname.replace(/\.[^/.]+$/, "") + ".pdf";
+
+                    // Update file size property
+                    const stats = fs.statSync(req.file.path);
+                    req.file.size = stats.size;
+
+                    console.log(`Successfully converted to PDF: ${req.file.originalname}`);
+                } catch (conversionError) {
+                    console.error('Document conversion failed:', conversionError);
+                    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+                    return res.status(500).json({ error: 'Document conversion failed. Please try again.' });
+                }
+            }
+
             const fileBuffer = fs.readFileSync(req.file.path);
             const hashSum = crypto.createHash('sha256');
             hashSum.update(fileBuffer);
             const fileHash = hashSum.digest('hex');
 
-            // Check duplicate
-            const existingDoc = await prisma.document.findUnique({
-                where: { fileHash }
+            // 1. Check for duplicates (Polite Check)
+            const existingDoc = await prisma.document.findFirst({
+                where: {
+                    fileHash: fileHash,
+                    isArchived: false // Ignore files that have been sent to the archive
+                }
             });
 
-            // Make sure the existing doc isn't the one we are currently updating!
-            if (existingDoc && existingDoc.id !== parseInt(id)) {
-                fs.unlinkSync(req.file.path);
-                return res.status(400).json({ error: 'This exact document already exists elsewhere.' });
+            if (existingDoc) {
+                // Delete the duplicate file from the hard drive to save space
+                const fs = require('fs');
+                if (fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
+                // Return a polite 400 error to the frontend
+                return res.status(400).json({
+                    message: "Duplicate File Detected: This document already exists in the system."
+                });
             }
+
 
             // Get the old document so we can delete its physical file
             const oldDocument = await prisma.document.findUnique({ where: { id: parseInt(id) } });

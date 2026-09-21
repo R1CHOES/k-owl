@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, UploadCloud, Link as LinkIcon, Building2, CheckCircle, Clock, AlertCircle, Loader2, Eye, Download, X, Edit, Sparkles, Archive } from 'lucide-react';
+import { FileText, UploadCloud, Link as LinkIcon, Building2, CheckCircle, Clock, AlertCircle, Loader2, Eye, Download, X, Edit, Sparkles, Archive, Trash, Search, Save } from 'lucide-react';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 
@@ -20,6 +20,10 @@ const ManageDocuments = () => {
     const [editFile, setEditFile] = useState(null);
     const editFileInputRef = useRef(null);
     const [organizedDoc, setOrganizedDoc] = useState(null);
+    const [selectedPair, setSelectedPair] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [editDataDoc, setEditDataDoc] = useState(null);
+    const [editJson, setEditJson] = useState("");
 
     const primaryNavy = '#123971';
     const secondaryCyan = '#11B4D4';
@@ -167,6 +171,24 @@ const ManageDocuments = () => {
         }
     };
 
+    const handleEditDataClick = (doc) => {
+        setEditDataDoc(doc);
+        setEditJson(JSON.stringify(doc.versions?.[0]?.content?.dynamicMetadata || {}, null, 2));
+    };
+
+    const handleSaveData = async () => {
+        try {
+            const parsedData = JSON.parse(editJson);
+            const contentId = editDataDoc.versions[0].content.id;
+            await api.patch(`/api/content/${contentId}/data`, { dynamicMetadata: parsedData });
+            Swal.fire({ icon: 'success', title: 'Data Updated', confirmButtonColor: secondaryCyan });
+            setEditDataDoc(null);
+            fetchData();
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Invalid JSON or Error', text: err.message });
+        }
+    };
+
     const getStatusBadge = (status) => {
         switch(status) {
             case 'PENDING_EXTRACTION': return <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold border border-yellow-200">Pending Extraction</span>;
@@ -179,11 +201,32 @@ const ManageDocuments = () => {
         }
     };
 
+    const filteredDocuments = documents.filter(doc => {
+        if (!searchTerm) return true;
+        const searchLower = searchTerm.toLowerCase();
+        const filenameMatch = doc.versions?.[0]?.filename?.toLowerCase().includes(searchLower);
+        const contentMetadata = JSON.stringify(doc.versions?.[0]?.content?.dynamicMetadata || {}).toLowerCase();
+        const metadataMatch = contentMetadata.includes(searchLower);
+        return filenameMatch || metadataMatch;
+    });
+
     return (
         <div className="flex flex-col h-full space-y-8 animate-fade-in pb-8">
-            <div>
-                <h1 className="text-3xl font-bold text-gray-800">Manage Documents</h1>
-                <p className="text-gray-500 mt-2">Upload, hash, and track source documents across agencies.</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-800">Manage Documents</h1>
+                    <p className="text-gray-500 mt-2">Upload, hash, and track source documents across agencies.</p>
+                </div>
+                <div className="relative w-full md:w-96">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                    <input 
+                        type="text" 
+                        placeholder="Search by filename or AI data..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] shadow-sm transition-all"
+                    />
+                </div>
             </div>
 
             {/* TOP HALF: Upload Card */}
@@ -254,94 +297,123 @@ const ManageDocuments = () => {
                 </form>
             </div>
 
-            {/* BOTTOM HALF: Data Table */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-8 py-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800">Document Repository</h3>
-                        <p className="text-sm text-gray-500 font-medium mt-1">All uploaded source files across the system</p>
+            {/* BOTTOM HALF: Split Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Left Column: Uploaded Documents */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <FileText className="text-cyan-500" size={24} /> Uploaded Documents
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+                        {loading ? (
+                            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
+                        ) : filteredDocuments.length === 0 ? (
+                            <div className="text-center text-gray-500 p-8">No documents found.</div>
+                        ) : (
+                            filteredDocuments.map(doc => (
+                                <div 
+                                    key={doc.id}
+                                    onClick={() => setSelectedPair(doc)}
+                                    className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md hover:border-cyan-500 cursor-pointer transition-all flex flex-col gap-2 group"
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-cyan-50 rounded-lg group-hover:bg-cyan-100 transition-colors">
+                                                <FileText className="text-cyan-500" size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-gray-800 truncate max-w-[200px] sm:max-w-[300px]">
+                                                    {doc.versions?.[0]?.filename || 'Unknown File'}
+                                                </h4>
+                                                <p className="text-xs text-gray-500 font-medium mt-1">
+                                                    {(doc.versions?.[0]?.fileSizeBytes ? (doc.versions[0].fileSizeBytes / 1024 / 1024).toFixed(2) : 0)} MB • {doc.versions?.[0]?.uploader?.username || 'System'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2">
+                                        <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                                            <Clock size={14} /> {new Date(doc.createdAt).toLocaleDateString()}
+                                        </div>
+                                        <div className="flex gap-2 items-center">
+                                            {getStatusBadge(doc.status)}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); handleArchive(doc); }}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Archive Document"
+                                            >
+                                                <Trash size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    {loading ? (
-                        <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
-                    ) : documents.length === 0 ? (
-                        <div className="p-12 text-center text-gray-500">No documents have been uploaded yet.</div>
-                    ) : (
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-white border-b border-gray-100">
-                                    <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-wider">Filename</th>
-                                    <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-wider">Agency</th>
-                                    <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-wider">Uploader</th>
-                                    <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-wider">Date</th>
-                                    <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-wider">Status</th>
-                                    <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-wider text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {documents.map(doc => (
-                                    <tr key={doc.id} className="hover:bg-gray-50/50 transition-colors group">
-                                        <td className="px-8 py-5">
-                                            <div className="flex items-center gap-3">
-                                                <FileText className="text-gray-400 group-hover:text-[#11B4D4] transition-colors" size={20} />
-                                                <div>
-                                                    <p className="font-bold text-gray-800 truncate max-w-[250px]">{doc.versions?.[0]?.filename || 'No File'}</p>
-                                                    <p className="text-xs text-gray-500 font-medium">{doc.versions?.[0] ? (doc.versions[0].fileSizeBytes / 1024).toFixed(1) : 0} KB</p>
-                                                </div>
+                {/* Right Column: Generated Contents */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <Sparkles className="text-purple-500" size={24} /> Generated Contents
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+                        {loading ? (
+                            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
+                        ) : filteredDocuments.length === 0 ? (
+                            <div className="text-center text-gray-500 p-8">No generated content found.</div>
+                        ) : (
+                            filteredDocuments.map(doc => {
+                                const content = doc.versions?.[0]?.content;
+                                return (
+                                    <div 
+                                        key={`content-${doc.id}`}
+                                        onClick={() => setSelectedPair(doc)}
+                                        className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md hover:border-purple-500 cursor-pointer transition-all flex flex-col gap-3 group relative"
+                                    >
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleEditDataClick(doc); }}
+                                            className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors z-10"
+                                            title="Edit AI Data"
+                                        >
+                                            <Edit size={16} />
+                                        </button>
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors">
+                                                <Sparkles className="text-purple-500" size={20} />
                                             </div>
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            <span className="font-medium text-gray-700">{doc.agency?.name || 'Unknown'}</span>
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            <span className="font-medium text-gray-600">{doc.versions?.[0]?.uploader?.username || 'System'}</span>
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                                                <Clock size={14} className="text-gray-400" />
-                                                {new Date(doc.createdAt).toLocaleDateString()}
+                                            <div className="flex-1 min-w-0 pr-8">
+                                                <h4 className="font-bold text-gray-800 truncate">
+                                                    {content?.title || 'Processing AI Content...'}
+                                                </h4>
+                                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                                    {content?.descriptionText || 'Content is being generated by AI. Please check back shortly.'}
+                                                </p>
                                             </div>
-                                        </td>
-                                        <td className="px-8 py-5">
-                                            {getStatusBadge(doc.status)}
-                                        </td>
-                                        <td className="px-8 py-5 text-right flex items-center justify-end gap-2">
-                                            <button 
-                                                onClick={() => setPreviewDoc(doc)}
-                                                className="p-2 text-gray-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-full transition-colors inline-flex"
-                                                title="Preview Document"
-                                            >
-                                                <Eye size={18} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleEditClick(doc)}
-                                                className="p-2 text-gray-400 hover:text-[#11B4D4] hover:bg-[#11B4D4]/10 rounded-full transition-colors inline-flex"
-                                                title="Edit Document Metadata"
-                                            >
-                                                <Edit size={18} />
-                                            </button>
-                                            <button 
-                                                onClick={() => setOrganizedDoc(doc)}
-                                                className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-colors inline-flex"
-                                                title="View Organized PDF"
-                                            >
-                                                <Sparkles size={18} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleArchive(doc)}
-                                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors inline-flex"
-                                                title="Archive Document"
-                                            >
-                                                <Archive size={18} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                                        </div>
+                                        {content?.keywords && (
+                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                {content.keywords.slice(0, 3).map((keyword, idx) => (
+                                                    <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold tracking-wide uppercase">
+                                                        {keyword}
+                                                    </span>
+                                                ))}
+                                                {content.keywords.length > 3 && (
+                                                    <span className="px-2 py-1 bg-gray-100 text-gray-400 rounded-md text-[10px] font-bold">
+                                                        +{content.keywords.length - 3}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -517,6 +589,121 @@ const ManageDocuments = () => {
                 </div>
             )}
 
+
+            {/* TRACEABILITY LINK MODAL */}
+            {selectedPair && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh]">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                    <LinkIcon size={24} className="text-cyan-500" /> Document Traceability Link
+                                </h2>
+                                <p className="text-sm text-gray-500 mt-1 font-medium">Viewing original upload and AI generated report side-by-side</p>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedPair(null)}
+                                className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors bg-white shadow-sm border border-gray-200"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body - Split View */}
+                        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2 bg-gray-100">
+                            {/* Left: Original Upload */}
+                            <div className="p-4 flex flex-col border-r border-gray-200">
+                                <div className="mb-3 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                        <FileText size={18} className="text-cyan-500" /> Original Uploaded PDF
+                                    </h3>
+                                    <span className="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded truncate max-w-[200px]">
+                                        {selectedPair.versions?.[0]?.filename}
+                                    </span>
+                                </div>
+                                <iframe 
+                                    src={selectedPair.versions?.[0]?.filePath ? ('http://localhost:3000/uploads/' + selectedPair.versions[0].filePath.split('\\').pop().split('/').pop()) : ''}
+                                    className="w-full flex-1 min-h-[60vh] h-[70vh] rounded-xl border border-gray-200 shadow-inner bg-white"
+                                    title="Original PDF"
+                                ></iframe>
+                            </div>
+
+                            {/* Right: AI Generated Report */}
+                            <div className="p-4 flex flex-col">
+                                <div className="mb-3 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                        <Sparkles size={18} className="text-purple-500" /> AI Organized Report
+                                    </h3>
+                                    <a 
+                                        href={`http://localhost:3000/uploads/generated/organized_${selectedPair.versions?.[0]?.id}.pdf`}
+                                        download={`organized_${selectedPair.versions?.[0]?.filename || 'report'}.pdf`}
+                                        className="text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-600 px-3 py-1 rounded transition-colors flex items-center gap-1"
+                                    >
+                                        <Download size={14} /> Download
+                                    </a>
+                                </div>
+                                <iframe 
+                                    src={`http://localhost:3000/uploads/generated/organized_${selectedPair.versions?.[0]?.id}.pdf`}
+                                    className="w-full flex-1 min-h-[60vh] h-[70vh] rounded-xl border border-gray-200 shadow-inner bg-white"
+                                    title="Generated PDF"
+                                ></iframe>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MANUAL DATA EDIT MODAL */}
+            {editDataDoc && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                    <Edit size={20} className="text-purple-600" /> Manual Data Editor
+                                </h2>
+                                <p className="text-sm text-gray-500 mt-1 font-medium">Edit the AI-extracted metadata for this document</p>
+                            </div>
+                            <button 
+                                onClick={() => setEditDataDoc(null)}
+                                className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors bg-white shadow-sm border border-gray-200"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body - Textarea */}
+                        <div className="p-6 bg-gray-50 flex-1 overflow-hidden flex flex-col">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Raw JSON Data</label>
+                            <textarea 
+                                value={editJson}
+                                onChange={(e) => setEditJson(e.target.value)}
+                                className="w-full flex-1 min-h-[50vh] p-4 bg-gray-900 text-green-400 font-mono text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 shadow-inner resize-none"
+                                spellCheck="false"
+                            />
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-6 pt-4 border-t border-gray-100 bg-white flex justify-end gap-3">
+                            <button 
+                                onClick={() => setEditDataDoc(null)} 
+                                className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={handleSaveData} 
+                                className="px-6 py-2.5 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2" 
+                                style={{ backgroundColor: '#9333ea' }}
+                            >
+                                <Save size={18} /> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

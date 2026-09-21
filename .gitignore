@@ -15,3 +15,6 @@ frontend/dist/
 
 # Logs
 npm-debug.log*
+# Uploaded Files
+backend/uploads/
+*.pdf

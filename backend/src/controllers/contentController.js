@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const pdfGeneratorService = require('../services/pdfGeneratorService');
 
 /**
  * Saves a new human-edited ContentVersion snapshot.
@@ -43,6 +44,29 @@ const saveContentVersion = async (req, res) => {
     }
 };
 
+const updateContentData = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { dynamicMetadata } = req.body;
+
+        if (!id) return res.status(400).json({ error: 'contentId is required' });
+
+        const updatedContent = await prisma.content.update({
+            where: { id: parseInt(id) },
+            data: { dynamicMetadata }
+        });
+
+        // Regenerate PDF
+        await pdfGeneratorService.generateCleanPDF(updatedContent.documentVersionId, updatedContent);
+
+        res.json(updatedContent);
+    } catch (error) {
+        console.error('Error updating content data:', error);
+        res.status(500).json({ error: 'Failed to update content data.' });
+    }
+};
+
 module.exports = {
-    saveContentVersion
+    saveContentVersion,
+    updateContentData
 };
