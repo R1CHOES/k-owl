@@ -1,6 +1,8 @@
 const PDFDocument = require('pdfkit-table');
 const fs = require('fs');
 const path = require('path');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 const ensureDirectoryExists = (dirPath) => {
     if (!fs.existsSync(dirPath)) {
@@ -19,7 +21,11 @@ const generateCleanPDF = async (versionId, contentData) => {
             const generatedDir = path.join(__dirname, '../../uploads/generated');
             ensureDirectoryExists(generatedDir);
             
-            const filePath = path.join(generatedDir, `organized_${versionId}.pdf`);
+            const version = await prisma.documentVersion.findUnique({ where: { id: versionId } });
+            const versionNum = version ? version.versionNumber : 1;
+            const safeTitle = (contentData.title || 'Document').replace(/[<>:"/\\|?*]+/g, '').trim();
+            const fileName = `${safeTitle}_Content_v${versionNum}.pdf`;
+            const filePath = path.join(generatedDir, fileName);
             
             // Use landscape A4 to fit the wide table layout (Excel style)
             const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
@@ -30,7 +36,7 @@ const generateCleanPDF = async (versionId, contentData) => {
             // Draw professional header
             doc.font('Helvetica-Bold')
                .fontSize(18)
-               .text('Automated K-OWL Document Report', { align: 'center' });
+               .text('AI Report: ' + (contentData.title || 'Document'), { align: 'center' });
                
             doc.moveDown(2);
             

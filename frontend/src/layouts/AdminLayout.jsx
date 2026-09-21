@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Building2, LogOut, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, LogOut, FileText, ClipboardCheck } from 'lucide-react';
 import Swal from 'sweetalert2';
 import mainLogo from '../assets/k-owl-main-logo.png';
 
@@ -29,6 +29,7 @@ const AdminLayout = () => {
     const navLinks = [
         { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
         { name: 'Manage Documents', path: '/documents', icon: FileText },
+        { name: 'QA & Approvals', path: '/qa-approvals', icon: ClipboardCheck },
         { name: 'Manage Users', path: '/users', icon: Users },
         { name: 'Manage Agencies', path: '/agencies', icon: Building2 },
     ];

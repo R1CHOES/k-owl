@@ -97,6 +97,8 @@ const extractAndOrganize = async (documentVersionId) => {
         // Automate PDF Generation
         await pdfGeneratorService.generateCleanPDF(version.id, contentData);
 
+        await prisma.document.update({ where: { id: version.documentId }, data: { status: 'IN_QA' } });
+
         console.log(`Successfully extracted and created CMS Content for Version ID: ${version.id}`);
         return newContent;
 
