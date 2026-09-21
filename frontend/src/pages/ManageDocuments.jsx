@@ -22,8 +22,8 @@ const ManageDocuments = () => {
     const [organizedDoc, setOrganizedDoc] = useState(null);
     const [selectedPair, setSelectedPair] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [editDataDoc, setEditDataDoc] = useState(null);
-    const [editJson, setEditJson] = useState("");
+    const [editingContent, setEditingContent] = useState(null);
+    const [aiMetadataForm, setAiMetadataForm] = useState({});
 
     const primaryNavy = '#123971';
     const secondaryCyan = '#11B4D4';
@@ -171,21 +171,53 @@ const ManageDocuments = () => {
         }
     };
 
+    const formatCamelToTitle = (text) => {
+        const result = text.replace(/([A-Z])/g, " $1");
+        return result.charAt(0).toUpperCase() + result.slice(1);
+    };
+
     const handleEditDataClick = (doc) => {
-        setEditDataDoc(doc);
-        setEditJson(JSON.stringify(doc.versions?.[0]?.content?.dynamicMetadata || {}, null, 2));
+        setEditingContent(doc);
+        const metadata = doc.versions?.[0]?.content?.dynamicMetadata || {};
+        setAiMetadataForm(JSON.parse(JSON.stringify(metadata)));
+    };
+
+    const handleFieldChange = (cluster, key, newValue) => {
+        setAiMetadataForm(prev => ({
+            ...prev,
+            [cluster]: {
+                ...prev[cluster],
+                [key]: newValue
+            }
+        }));
     };
 
     const handleSaveData = async () => {
         try {
-            const parsedData = JSON.parse(editJson);
-            const contentId = editDataDoc.versions[0].content.id;
-            await api.patch(`/api/content/${contentId}/data`, { dynamicMetadata: parsedData });
+            const dataToSave = { ...aiMetadataForm };
+            for (const cluster in dataToSave) {
+                for (const key in dataToSave[cluster]) {
+                    const val = dataToSave[cluster][key];
+                    if (typeof val === 'string') {
+                        try {
+                            const parsed = JSON.parse(val);
+                            if (typeof parsed === 'object' && parsed !== null) {
+                                dataToSave[cluster][key] = parsed;
+                            }
+                        } catch (e) {
+                            // Leave as string if not valid JSON object
+                        }
+                    }
+                }
+            }
+
+            const contentId = editingContent.versions[0].content.id;
+            await api.patch(`/api/content/${contentId}/metadata`, { dynamicMetadata: dataToSave });
             Swal.fire({ icon: 'success', title: 'Data Updated', confirmButtonColor: secondaryCyan });
-            setEditDataDoc(null);
+            setEditingContent(null);
             fetchData();
         } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Invalid JSON or Error', text: err.message });
+            Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.error || err.message });
         }
     };
 
@@ -655,48 +687,75 @@ const ManageDocuments = () => {
             )}
 
             {/* MANUAL DATA EDIT MODAL */}
-            {editDataDoc && (
+            {editingContent && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <div>
-                                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                    <Edit size={20} className="text-purple-600" /> Manual Data Editor
+                                <h2 className="text-xl font-bold text-[#123971] flex items-center gap-2">
+                                    <Edit size={20} className="text-[#00AEEF]" /> Manual Data Editor
                                 </h2>
                                 <p className="text-sm text-gray-500 mt-1 font-medium">Edit the AI-extracted metadata for this document</p>
                             </div>
                             <button 
-                                onClick={() => setEditDataDoc(null)}
+                                onClick={() => setEditingContent(null)}
                                 className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors bg-white shadow-sm border border-gray-200"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {/* Body - Textarea */}
-                        <div className="p-6 bg-gray-50 flex-1 overflow-hidden flex flex-col">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Raw JSON Data</label>
-                            <textarea 
-                                value={editJson}
-                                onChange={(e) => setEditJson(e.target.value)}
-                                className="w-full flex-1 min-h-[50vh] p-4 bg-gray-900 text-green-400 font-mono text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 shadow-inner resize-none"
-                                spellCheck="false"
-                            />
+                        {/* Body - Dynamic Form */}
+                        <div className="max-h-[70vh] overflow-y-auto p-4 space-y-8">
+                            {Object.keys(aiMetadataForm).length === 0 ? (
+                                <div className="text-center text-gray-500 p-8">No AI metadata extracted yet.</div>
+                            ) : (
+                                Object.entries(aiMetadataForm).map(([clusterKey, clusterValue]) => (
+                                    <div key={clusterKey} className="flex flex-col gap-5">
+                                        <h3 className="text-lg font-extrabold text-cyan-600 border-b-2 border-cyan-100 pb-2">
+                                            {formatCamelToTitle(clusterKey)}
+                                        </h3>
+                                        
+                                        {typeof clusterValue === 'object' && clusterValue !== null ? (
+                                            Object.entries(clusterValue).map(([fieldKey, fieldValue]) => {
+                                                const displayValue = typeof fieldValue === 'object' && fieldValue !== null 
+                                                    ? JSON.stringify(fieldValue, null, 2) 
+                                                    : fieldValue || '';
+                                                
+                                                return (
+                                                    <div key={fieldKey} className="flex flex-col">
+                                                        <label className="text-sm font-bold text-gray-700 mb-1">
+                                                            {formatCamelToTitle(fieldKey)}
+                                                        </label>
+                                                        <textarea 
+                                                            value={displayValue}
+                                                            onChange={(e) => handleFieldChange(clusterKey, fieldKey, e.target.value)}
+                                                            className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-800 shadow-sm resize-y whitespace-pre-wrap"
+                                                        />
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="text-sm text-gray-500">Invalid cluster format.</div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
                         </div>
 
                         {/* Footer */}
                         <div className="p-6 pt-4 border-t border-gray-100 bg-white flex justify-end gap-3">
                             <button 
-                                onClick={() => setEditDataDoc(null)} 
-                                className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+                                onClick={() => setEditingContent(null)} 
+                                className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-[#123971] font-bold rounded-xl transition-colors"
                             >
                                 Cancel
                             </button>
                             <button 
                                 onClick={handleSaveData} 
                                 className="px-6 py-2.5 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2" 
-                                style={{ backgroundColor: '#9333ea' }}
+                                style={{ backgroundColor: '#00AEEF' }}
                             >
                                 <Save size={18} /> Save Changes
                             </button>

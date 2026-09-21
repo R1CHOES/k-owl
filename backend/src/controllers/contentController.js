@@ -44,15 +44,15 @@ const saveContentVersion = async (req, res) => {
     }
 };
 
-const updateContentData = async (req, res) => {
+const updateContentMetadata = async (req, res) => {
     try {
-        const { id } = req.params;
+        const { contentId } = req.params;
         const { dynamicMetadata } = req.body;
 
-        if (!id) return res.status(400).json({ error: 'contentId is required' });
+        if (!contentId) return res.status(400).json({ error: 'contentId is required' });
 
         const updatedContent = await prisma.content.update({
-            where: { id: parseInt(id) },
+            where: { id: parseInt(contentId) },
             data: { dynamicMetadata }
         });
 
@@ -68,5 +68,5 @@ const updateContentData = async (req, res) => {
 
 module.exports = {
     saveContentVersion,
-    updateContentData
+    updateContentMetadata
 };
