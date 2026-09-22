@@ -31,6 +31,20 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+const verifyTokenOptional = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      req.user = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+    } catch (error) {
+      // Ignore token error for optional verification
+    }
+  }
+  next();
+};
+
 module.exports = {
-  verifyToken
+  verifyToken,
+  verifyTokenOptional
 };

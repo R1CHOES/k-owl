@@ -12,10 +12,8 @@ const ProtectedRoute = ({ children }) => {
     try {
         const decoded = jwtDecode(token);
         
-        // Enforce Super Admin Role
-        if (decoded.roleSlug !== 'super-admin') {
-            return <Navigate to="/login" replace />;
-        }
+        // We don't need to enforce a specific role here anymore.
+        // The AdminLayout and Dashboard components handle RBAC visibility.
         
         return children;
     } catch (error) {

@@ -31,6 +31,14 @@ const login = async (req, res) => {
       return res.status(403).json({ error: 'Account deactivated' });
     }
 
+    // Check account status
+    if (user.status === 'PENDING') {
+      return res.status(403).json({ error: 'Account pending approval' });
+    }
+    if (user.status === 'REJECTED') {
+      return res.status(403).json({ error: 'Account rejected' });
+    }
+
     // Compare passwords
     const isMatch = await bcrypt.compare(password, user.passwordHash);
 
@@ -68,28 +76,42 @@ const register = async (req, res) => {
     const currentUser = req.user; // Attached by authMiddleware
 
     // 1. Role-Based Access Control (RBAC) Logic
-    if (currentUser.roleSlug === 'super-admin') {
-      // Super-admins can create any user across any agency, proceed.
-    } else if (currentUser.roleSlug === 'agency-focal-person') {
-      // Agency Focal Persons can only create users for their own agency
-      if (agencyId !== currentUser.agencyId) {
-        return res.status(403).json({ error: 'Forbidden: Cannot create users for other agencies' });
-      }
+    if (currentUser) {
+      if (currentUser.roleSlug === 'superadmin' || currentUser.roleSlug === 'super-admin') {
+        // Super-admins can create any user across any agency, proceed.
+      } else if (currentUser.roleSlug === 'agency_admin') {
+        // Agency Focal Persons can only create users for their own agency
+        if (agencyId !== currentUser.agencyId) {
+          return res.status(403).json({ error: 'Forbidden: Cannot create users for other agencies' });
+        }
 
-      // Fetch the role they are trying to assign to ensure it's allowed
+        // Fetch the role they are trying to assign to ensure it's allowed
+        const targetRole = await prisma.role.findUnique({ where: { id: roleId } });
+        if (!targetRole) {
+          return res.status(400).json({ error: 'Invalid roleId provided' });
+        }
+
+        // Block creating higher-privileged roles
+        const forbiddenRoles = ['superadmin', 'kbm'];
+        if (forbiddenRoles.includes(targetRole.slug)) {
+          return res.status(403).json({ error: 'Forbidden: Cannot assign superadmin or knowledge-base-manager roles' });
+        }
+      } else {
+        // Any other role (e.g., standard user) is strictly forbidden from creating users
+        return res.status(403).json({ error: 'Forbidden: Insufficient privileges to create users' });
+      }
+    } else {
+      // Public Registration Check
       const targetRole = await prisma.role.findUnique({ where: { id: roleId } });
       if (!targetRole) {
         return res.status(400).json({ error: 'Invalid roleId provided' });
       }
 
-      // Block creating higher-privileged roles
-      const forbiddenRoles = ['super-admin', 'knowledge-base-manager'];
+      // Block public creation of high-privileged roles
+      const forbiddenRoles = ['superadmin', 'kbm', 'agency_admin'];
       if (forbiddenRoles.includes(targetRole.slug)) {
-        return res.status(403).json({ error: 'Forbidden: Cannot assign super-admin or knowledge-base-manager roles' });
+        return res.status(403).json({ error: 'Forbidden: Cannot publicly register as an admin or manager' });
       }
-    } else {
-      // Any other role (e.g., standard user) is strictly forbidden from creating users
-      return res.status(403).json({ error: 'Forbidden: Insufficient privileges to create users' });
     }
 
     // 2. Validate input constraints (basic check)
@@ -123,7 +145,8 @@ const register = async (req, res) => {
         passwordHash,
         designation,
         roleId,
-        agencyId
+        agencyId,
+        status: currentUser ? 'APPROVED' : 'PENDING'
       }
     });
 

@@ -104,6 +104,14 @@ const extractAndOrganize = async (documentVersionId) => {
 
     } catch (error) {
         console.error('Extraction Service Error:', error);
+        try {
+            await prisma.document.update({ 
+                where: { id: (await prisma.documentVersion.findUnique({ where: { id: documentVersionId } })).documentId }, 
+                data: { status: 'REJECTED' } 
+            });
+        } catch (dbError) {
+            console.error('Failed to update document status to REJECTED:', dbError);
+        }
         throw error;
     }
 };

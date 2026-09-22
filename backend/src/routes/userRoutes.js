@@ -12,4 +12,7 @@ router.patch('/:id/status', verifyToken, userController.toggleUserStatus);
 // PATCH /api/users/:id
 router.patch('/:id', verifyToken, userController.updateUser);
 
+// PATCH /api/users/:id/approval
+router.patch('/:id/approval', verifyToken, userController.changeUserApprovalStatus);
+
 module.exports = router;

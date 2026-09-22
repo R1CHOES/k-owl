@@ -8,6 +8,7 @@ import ManageAgencies from './pages/ManageAgencies';
 import DashboardOverview from './pages/DashboardOverview';
 import ManageDocuments from './pages/ManageDocuments';
 import QAApprovals from './pages/QAApprovals';
+import ReviewHistory from './pages/ReviewHistory';
 
 // MAIN APP COMPONENT & ROUTING
 // ==========================================
@@ -34,6 +35,7 @@ function App() {
           <Route path="dashboard" element={<DashboardOverview />} />
           <Route path="documents" element={<ManageDocuments />} />
           <Route path="qa-approvals" element={<QAApprovals />} />
+          <Route path="review-history" element={<ReviewHistory />} />
           <Route path="users" element={<ManageUsers />} />
           <Route path="agencies" element={<ManageAgencies />} />
         </Route>

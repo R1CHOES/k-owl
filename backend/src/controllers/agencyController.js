@@ -15,7 +15,7 @@ const getAllAgencies = async (req, res) => {
 
 const createAgency = async (req, res) => {
     try {
-        if (req.user.roleSlug !== 'super-admin') {
+        if (req.user.roleSlug !== 'superadmin') {
             return res.status(403).json({ error: 'Access denied. Super Admin only.' });
         }
         
@@ -41,7 +41,7 @@ const createAgency = async (req, res) => {
 
 const updateAgency = async (req, res) => {
     try {
-        if (req.user.roleSlug !== 'super-admin') {
+        if (req.user.roleSlug !== 'superadmin') {
             return res.status(403).json({ error: 'Access denied. Super Admin only.' });
         }
         

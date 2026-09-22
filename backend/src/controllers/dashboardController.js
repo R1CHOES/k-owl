@@ -9,10 +9,10 @@ const getDashboardStats = async (req, res) => {
         let agencyWhereClause = {};
 
         // RBAC Logic
-        if (roleSlug === 'agency-focal-person') {
+        if (roleSlug === 'focal_person') {
             userWhereClause = { agencyId };
             agencyWhereClause = { id: agencyId };
-        } else if (roleSlug !== 'super-admin') {
+        } else if (roleSlug !== 'superadmin' && roleSlug !== 'kbm') {
             return res.status(403).json({ error: 'Access denied.' });
         }
 

@@ -37,6 +37,7 @@ model User {
   passwordHash String // We will encrypt passwords using bcrypt
   designation  String? // e.g., "Senior Science Research Specialist"
   isActive     Boolean @default(true) // "Soft delete" so we don't break old documents
+  status       AccountStatus @default(PENDING) // Approval workflow
 
   // Relationships
   roleId Int
@@ -56,8 +57,15 @@ enum DocumentStatus {
   PENDING_EXTRACTION
   DRAFT
   IN_QA
+  PENDING_APPROVAL
   APPROVED
   PUBLISHED
+  REJECTED
+}
+
+enum AccountStatus {
+  PENDING
+  APPROVED
   REJECTED
 }
 

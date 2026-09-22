@@ -8,7 +8,7 @@ const getAllUsers = async (req, res) => {
         let users;
 
         // RBAC Logic
-        if (roleSlug === 'super-admin') {
+        if (roleSlug === 'superadmin') {
             users = await prisma.user.findMany({
                 include: {
                     role: true,
@@ -16,7 +16,7 @@ const getAllUsers = async (req, res) => {
                 },
                 orderBy: { createdAt: 'desc' }
             });
-        } else if (roleSlug === 'agency-focal-person') {
+        } else if (roleSlug === 'agency_admin') {
             users = await prisma.user.findMany({
                 where: { agencyId: agencyId },
                 include: {
@@ -63,7 +63,7 @@ const toggleUserStatus = async (req, res) => {
         }
 
         // RBAC Logic
-        if (roleSlug !== 'super-admin' && (roleSlug !== 'agency-focal-person' || userToToggle.agencyId !== agencyId)) {
+        if (roleSlug !== 'superadmin' && (roleSlug !== 'agency_admin' || userToToggle.agencyId !== agencyId)) {
              return res.status(403).json({ error: 'Access denied. You can only modify users in your own agency.' });
         }
 
@@ -101,7 +101,7 @@ const updateUser = async (req, res) => {
         }
 
         // RBAC Logic
-        if (roleSlug !== 'super-admin' && (roleSlug !== 'agency-focal-person' || userToUpdate.agencyId !== agencyId)) {
+        if (roleSlug !== 'superadmin' && (roleSlug !== 'agency_admin' || userToUpdate.agencyId !== agencyId)) {
              return res.status(403).json({ error: 'Access denied. You can only modify users in your own agency.' });
         }
 
@@ -130,8 +130,51 @@ const updateUser = async (req, res) => {
     }
 };
 
+const changeUserApprovalStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const { roleSlug, agencyId } = req.user;
+
+        if (!['APPROVED', 'REJECTED', 'PENDING'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+
+        const userToUpdate = await prisma.user.findUnique({
+            where: { id: parseInt(id) }
+        });
+
+        if (!userToUpdate) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // RBAC Logic
+        if (roleSlug !== 'superadmin' && (roleSlug !== 'agency_admin' || userToUpdate.agencyId !== agencyId)) {
+             return res.status(403).json({ error: 'Access denied. You can only modify users in your own agency.' });
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id: parseInt(id) },
+            data: { status },
+            include: { role: true, agency: true }
+        });
+        
+        const { passwordHash, ...safeUser } = updatedUser;
+        res.json({
+            ...safeUser,
+            roleSlug: safeUser.role.slug,
+            roleName: safeUser.role.roleName,
+            agencyName: safeUser.agency.name
+        });
+    } catch (error) {
+        console.error('Error changing user approval status:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getAllUsers,
     toggleUserStatus,
-    updateUser
+    updateUser,
+    changeUserApprovalStatus
 };

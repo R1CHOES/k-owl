@@ -30,8 +30,8 @@ const RegisterForm = ({ secondaryCyan, agencies, roles }) => {
             
             Swal.fire({
                 icon: 'success',
-                title: 'Account Created',
-                text: 'User has been registered successfully!',
+                title: 'Registration Received',
+                text: 'Your account has been successfully registered! Please wait for an administrator to approve your account before logging in.',
                 confirmButtonColor: secondaryCyan
             });
 

@@ -8,6 +8,7 @@ const LoginForm = ({ secondaryCyan }) => {
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [authStatus, setAuthStatus] = useState(null); // { type: 'pending' | 'rejected' | 'error', message: '' }
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -24,27 +25,58 @@ const LoginForm = ({ secondaryCyan }) => {
                 text: 'Welcome back to K-OWL!',
                 confirmButtonColor: secondaryCyan
             }).then(() => {
+                // Decode token to get user payload
                 const decoded = jwtDecode(res.data.token);
-                if (decoded.roleSlug === 'super-admin') {
-                    navigate('/dashboard');
-                } else {
-                    // For now, redirect others somewhere else or show message
-                    Swal.fire('Notice', 'You are logged in, but not as Super Admin. Routing for this role is under construction.', 'info');
+                
+                // Save RBAC context to local storage
+                localStorage.setItem('role', decoded.roleSlug || decoded.role);
+                if (decoded.agencyId) {
+                    localStorage.setItem('agencyId', decoded.agencyId);
                 }
+
+                // Route everyone to the dashboard (the dashboard will handle role-based UI restrictions)
+                navigate('/dashboard');
             });
 
         } catch (error) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Login Failed',
-                text: error.response?.data?.error || 'Invalid credentials. Please try again.',
-                confirmButtonColor: secondaryCyan
-            });
+            const errorMsg = error.response?.data?.error || 'Invalid credentials. Please try again.';
+            
+            if (errorMsg === 'Account pending approval') {
+                setAuthStatus({ type: 'pending', message: 'Your account registration has been received and is currently pending approval by an administrator. You will be able to log in once it is approved.' });
+            } else if (errorMsg === 'Account rejected') {
+                setAuthStatus({ type: 'rejected', message: 'Your account registration was reviewed and has been rejected. If you believe this is a mistake, please contact your agency administrator.' });
+            } else {
+                setAuthStatus(null);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Login Failed',
+                    text: errorMsg,
+                    confirmButtonColor: secondaryCyan
+                });
+            }
         }
     };
 
     return (
         <form className="w-full space-y-4 animate-fade-in" onSubmit={handleLogin}>
+
+            {authStatus && (
+                <div className={`p-4 rounded-xl border ${
+                    authStatus.type === 'pending' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                    authStatus.type === 'rejected' ? 'bg-rose-50 border-rose-200 text-rose-800' :
+                    'bg-red-50 border-red-200 text-red-800'
+                } mb-4 text-sm font-medium animate-fade-in-up flex items-start gap-3`}>
+                    <div className="shrink-0 mt-0.5">
+                        {authStatus.type === 'pending' ? '⏳' : '❌'}
+                    </div>
+                    <div>
+                        <h4 className="font-bold mb-1">
+                            {authStatus.type === 'pending' ? 'Account Pending' : 'Account Rejected'}
+                        </h4>
+                        <p className="opacity-90 leading-relaxed">{authStatus.message}</p>
+                    </div>
+                </div>
+            )}
 
             <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email Address</label>

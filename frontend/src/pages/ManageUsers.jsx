@@ -39,7 +39,16 @@ const ManageUsers = () => {
     const fetchUsers = async () => {
         try {
             const res = await api.get('/api/users');
-            setUsers(res.data);
+            let fetchedUsers = res.data;
+            
+            const userRole = localStorage.getItem('role') || 'superadmin';
+            const userAgencyId = localStorage.getItem('agencyId');
+            
+            if (userRole === 'agency_admin' || userRole === 'admin') {
+                fetchedUsers = fetchedUsers.filter(u => u.agencyId === parseInt(userAgencyId));
+            }
+            
+            setUsers(fetchedUsers);
             setLoading(false);
         } catch (error) {
             console.error("Failed to fetch users", error);
@@ -122,6 +131,44 @@ const ManageUsers = () => {
                         icon: 'error',
                         title: 'Error',
                         text: error.response?.data?.error || 'Failed to change user status.',
+                        confirmButtonColor: secondaryCyan
+                    });
+                }
+            }
+        });
+    };
+
+    const handleApprovalStatus = async (status) => {
+        if (!selectedUser) return;
+        
+        Swal.fire({
+            title: 'Are you sure?',
+            text: `Are you sure you want to ${status.toLowerCase()} this user's account?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: status === 'APPROVED' ? '#22c55e' : '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: `Yes, ${status.toLowerCase()}!`
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const res = await api.patch(`/api/users/${selectedUser.id}/approval`, { status });
+                    const updatedUser = res.data;
+                    
+                    setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
+                    setSelectedUser(updatedUser);
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: `User has been successfully ${status.toLowerCase()}.`,
+                        confirmButtonColor: secondaryCyan
+                    });
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.response?.data?.error || `Failed to ${status.toLowerCase()} user.`,
                         confirmButtonColor: secondaryCyan
                     });
                 }
@@ -244,11 +291,22 @@ const ManageUsers = () => {
                         {/* Profile Header */}
                         <div className="p-8 flex flex-col items-center border-b border-gray-100 relative">
                             {/* Status Dot */}
-                            <div className="absolute top-6 right-6 flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                                <div className={`w-2.5 h-2.5 rounded-full ${selectedUser.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></div>
-                                <span className={`text-xs font-bold ${selectedUser.isActive ? 'text-green-600' : 'text-red-600'}`}>
-                                    {selectedUser.isActive ? 'ACTIVE' : 'INACTIVE'}
-                                </span>
+                            <div className="absolute top-6 right-6 flex flex-col gap-2">
+                                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${selectedUser.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></div>
+                                    <span className={`text-xs font-bold ${selectedUser.isActive ? 'text-green-600' : 'text-red-600'}`}>
+                                        {selectedUser.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                    </span>
+                                </div>
+                                {selectedUser.status && (
+                                    <div className={`flex items-center justify-center px-3 py-1.5 rounded-full border text-[10px] font-bold tracking-wider ${
+                                        selectedUser.status === 'APPROVED' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
+                                        selectedUser.status === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-600' :
+                                        'bg-amber-50 border-amber-100 text-amber-600'
+                                    }`}>
+                                        {selectedUser.status}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Avatar */}
@@ -294,22 +352,41 @@ const ManageUsers = () => {
 
                         {/* Action Buttons */}
                         <div className="p-6 bg-gray-50/80 border-t border-gray-100 flex gap-3">
-                            <button 
-                                onClick={handleEditClick}
-                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-gray-200 rounded-xl text-gray-700 font-bold hover:bg-gray-100 hover:border-gray-300 transition-all shadow-sm"
-                            >
-                                <Edit size={16} /> Edit Profile
-                            </button>
-                            <button 
-                                onClick={handleToggleStatus}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all ${
-                                    selectedUser.isActive 
-                                    ? 'bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 hover:border-red-300' 
-                                    : 'bg-green-50 border border-green-200 text-green-600 hover:bg-green-100 hover:border-green-300'
-                                }`}
-                            >
-                                {selectedUser.isActive ? <><UserX size={16} /> Deactivate</> : <><UserCheck size={16} /> Reactivate</>}
-                            </button>
+                            {selectedUser.status === 'PENDING' ? (
+                                <>
+                                    <button 
+                                        onClick={() => handleApprovalStatus('APPROVED')}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 font-bold hover:bg-emerald-100 hover:border-emerald-300 transition-all shadow-sm"
+                                    >
+                                        <UserCheck size={16} /> Approve
+                                    </button>
+                                    <button 
+                                        onClick={() => handleApprovalStatus('REJECTED')}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-bold hover:bg-rose-100 hover:border-rose-300 transition-all shadow-sm"
+                                    >
+                                        <UserX size={16} /> Reject
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button 
+                                        onClick={handleEditClick}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-gray-200 rounded-xl text-gray-700 font-bold hover:bg-gray-100 hover:border-gray-300 transition-all shadow-sm"
+                                    >
+                                        <Edit size={16} /> Edit Profile
+                                    </button>
+                                    <button 
+                                        onClick={handleToggleStatus}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold transition-all ${
+                                            selectedUser.isActive 
+                                            ? 'bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 hover:border-red-300' 
+                                            : 'bg-green-50 border border-green-200 text-green-600 hover:bg-green-100 hover:border-green-300'
+                                        }`}
+                                    >
+                                        {selectedUser.isActive ? <><UserX size={16} /> Deactivate</> : <><UserCheck size={16} /> Reactivate</>}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -375,6 +452,8 @@ const ManageUsers = () => {
                                             <h3 className="font-bold text-gray-800 text-base group-hover:text-[#11B4D4] transition-colors flex items-center gap-2">
                                                 {user.username}
                                                 {!user.isActive && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase">Inactive</span>}
+                                                {user.status === 'PENDING' && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">Pending</span>}
+                                                {user.status === 'REJECTED' && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full uppercase">Rejected</span>}
                                             </h3>
                                             <p className="text-sm text-gray-500 font-medium">{user.email}</p>
                                         </div>

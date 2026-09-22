@@ -4,9 +4,12 @@ import api from '../utils/api';
 import Swal from 'sweetalert2';
 
 const ManageDocuments = () => {
+    const userRole = localStorage.getItem('role') || 'superadmin';
+    const userAgencyId = localStorage.getItem('agencyId');
+
     // Form State
     const [file, setFile] = useState(null);
-    const [agencyId, setAgencyId] = useState('');
+    const [agencyId, setAgencyId] = useState((userRole === 'focal_person' || userRole === 'focal' || userRole === 'agency-focal-person') ? userAgencyId : '');
     const fileInputRef = useRef(null);
 
     // Data State
@@ -49,8 +52,23 @@ const ManageDocuments = () => {
                 api.get('/api/agencies'),
                 api.get('/api/documents')
             ]);
+            
+            // 1. Safely retrieve auth context
+            const currentUserRole = localStorage.getItem('role') || '';
+            const rawAgencyId = localStorage.getItem('agencyId');
+            const currentUserAgencyId = (rawAgencyId && rawAgencyId !== 'undefined') ? parseInt(rawAgencyId, 10) : null;
+
+            // 2. The Bulletproof Scope Lock
+            let securedDocs = docsRes.data;
+            const globalRoles = ['superadmin', 'kbm', 'knowledge_base_manager'];
+
+            if (!globalRoles.includes(currentUserRole)) {
+                // strictly lock the data to their specific agency ID.
+                securedDocs = securedDocs.filter(doc => doc.agencyId === currentUserAgencyId);
+            }
+            
             setAgencies(agenciesRes.data);
-            setDocuments(docsRes.data);
+            setDocuments(securedDocs);
             setLoading(false);
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -239,13 +257,14 @@ const ManageDocuments = () => {
 
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-cyan-100 text-cyan-800 rounded-full text-[10px] font-bold animate-pulse uppercase tracking-wider">⚙️ AI Processing...</span>;
-            case 'IN_QA': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-[10px] font-bold uppercase tracking-wider">🟡 Needs QA Review</span>;
-            case 'APPROVED': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold uppercase tracking-wider">✅ Approved</span>;
-            case 'REJECTED': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-full text-[10px] font-bold uppercase tracking-wider">❌ Rejected</span>;
-            case 'PUBLISHED': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-[#11B4D4]/10 text-[#11B4D4] rounded-full text-[10px] font-bold uppercase tracking-wider">Published</span>;
-            case 'DRAFT': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-[10px] font-bold uppercase tracking-wider">Draft</span>;
-            default: return <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-[10px] font-bold uppercase tracking-wider">{status}</span>;
+            case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-bold border border-cyan-100 shadow-sm animate-pulse"><Loader2 size={12} className="animate-spin" /> Processing AI...</span>;
+            case 'IN_QA': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold border border-yellow-100 shadow-sm"><AlertCircle size={12} /> QA Review</span>;
+            case 'PENDING_APPROVAL': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-bold border border-purple-100 shadow-sm"><AlertCircle size={12} /> Needs Final Approval</span>;
+            case 'APPROVED': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100 shadow-sm"><CheckCircle size={12} /> Approved</span>;
+            case 'REJECTED': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-100 shadow-sm"><X size={12} /> Rejected</span>;
+            case 'PUBLISHED': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100 shadow-sm"><Eye size={12} /> Published</span>;
+            case 'DRAFT': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-bold border border-gray-200 shadow-sm"><FileText size={12} /> Draft</span>;
+            default: return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-bold border border-gray-200 shadow-sm">{status}</span>;
         }
     };
 
@@ -279,38 +298,37 @@ const ManageDocuments = () => {
     return (
         <div className="flex flex-col h-full space-y-6 animate-fade-in pb-8">
             <div>
-                <h1 className="text-3xl font-bold text-gray-800">Manage Documents</h1>
-                <p className="text-gray-500 mt-2">Upload, hash, and track source documents across agencies.</p>
+                <h1 className="text-3xl font-light tracking-tight text-slate-900">Manage Documents</h1>
+                <p className="text-slate-500 mt-1">Upload, hash, and track source documents across agencies.</p>
             </div>
             
             {/* Control Bar */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100 gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-200 gap-4">
                 <div className="relative w-full md:w-[400px]">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input
                         type="text"
                         placeholder="Search by filename or AI data..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all font-medium"
+                        className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all text-sm font-medium"
                     />
                 </div>
                 <button
                     onClick={() => setIsUploadModalOpen(true)}
-                    className="w-full md:w-auto px-6 py-3 text-white font-bold rounded-xl shadow-md transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2"
-                    style={{ backgroundColor: secondaryCyan }}
+                    className="w-full md:w-auto px-6 py-2.5 bg-[#11B4D4] text-white font-semibold rounded-lg hover:bg-cyan-500 transition-colors flex items-center justify-center gap-2"
                 >
-                    <UploadCloud size={20} /> + Upload Document
+                    <UploadCloud size={18} /> Upload Document
                 </button>
             </div>
 
             {/* Split Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left Column: Uploaded Documents */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <FileText className="text-cyan-500" size={24} /> Uploaded Documents
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                            <FileText className="text-cyan-500 w-5 h-5" /> Uploaded Documents
                         </h3>
                     </div>
                     <div className="p-6 grid grid-cols-1 gap-4 w-full max-h-[600px] overflow-y-auto">
@@ -323,7 +341,7 @@ const ManageDocuments = () => {
                                 <div
                                     key={doc.id}
                                     onClick={() => setSelectedPair(doc)}
-                                    className="flex flex-col justify-between h-[120px] p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-cyan-500 cursor-pointer transition-all w-full overflow-hidden group"
+                                    className="flex flex-col justify-between h-[120px] p-4 bg-white border border-slate-200 rounded-lg hover:border-cyan-400 hover:shadow-sm cursor-pointer transition-all w-full overflow-hidden group"
                                 >
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-start gap-3 w-full">
@@ -363,10 +381,10 @@ const ManageDocuments = () => {
                 </div>
 
                 {/* Right Column: Generated Contents */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            <Sparkles className="text-purple-500" size={24} /> Generated Contents
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                            <Sparkles className="text-purple-500 w-5 h-5" /> Generated Contents
                         </h3>
                     </div>
                     <div className="p-6 grid grid-cols-1 gap-4 w-full max-h-[600px] overflow-y-auto">
@@ -383,7 +401,7 @@ const ManageDocuments = () => {
                                     <div
                                         key={`content-${doc.id}`}
                                         onClick={() => !isPending && setSelectedPair(doc)}
-                                        className={`flex flex-col justify-between h-[120px] p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-purple-500 ${isPending ? 'cursor-default opacity-80' : 'cursor-pointer'} transition-all w-full overflow-hidden group relative`}
+                                        className={`flex flex-col justify-between h-[120px] p-4 bg-white border border-slate-200 rounded-lg hover:border-purple-400 hover:shadow-sm ${isPending ? 'cursor-default opacity-80' : 'cursor-pointer'} transition-all w-full overflow-hidden group relative`}
                                     >
                                         {!isPending && (
                                             <button
@@ -809,7 +827,7 @@ const ManageDocuments = () => {
                                     if (uploading) return;
                                     setIsUploadModalOpen(false);
                                     setFile(null);
-                                    setAgencyId('');
+                                    setAgencyId((userRole === 'focal_person' || userRole === 'focal' || userRole === 'agency-focal-person') ? userAgencyId : '');
                                 }}
                                 className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                 disabled={uploading}
@@ -819,26 +837,28 @@ const ManageDocuments = () => {
                         </div>
                         
                         <div className="p-8 space-y-8 bg-white">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                    <Building2 size={16} className="text-gray-400" /> 1. Select Owning Agency <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    value={agencyId}
-                                    onChange={(e) => setAgencyId(e.target.value)}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all font-bold text-gray-700 appearance-none cursor-pointer"
-                                    disabled={uploading}
-                                >
-                                    <option value="" disabled>Select an Agency</option>
-                                    {agencies.map(a => (
-                                        <option key={a.id} value={a.id}>{a.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {!(userRole === 'focal_person' || userRole === 'focal' || userRole === 'agency-focal-person') && (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                                        <Building2 size={16} className="text-gray-400" /> 1. Select Owning Agency <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={agencyId}
+                                        onChange={(e) => setAgencyId(e.target.value)}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all font-bold text-gray-700 appearance-none cursor-pointer"
+                                        disabled={uploading}
+                                    >
+                                        <option value="" disabled>Select an Agency</option>
+                                        {agencies.map(a => (
+                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                    <FileText size={16} className="text-gray-400" /> 2. Drop or Select File <span className="text-[#11B4D4] font-medium">(Auto-Uploads instantly)</span>
+                                    <FileText size={16} className="text-gray-400" /> {userRole === 'focal_person' || userRole === 'focal' ? '1.' : '2.'} Drop or Select File <span className="text-[#11B4D4] font-medium">(Auto-Uploads instantly)</span>
                                 </label>
                                 <div
                                     className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer transition-all ${agencyId ? (file ? 'border-green-500 bg-green-50 hover:bg-green-100' : 'border-[#11B4D4] bg-[#11B4D4]/5 hover:bg-[#11B4D4]/10') : 'border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed'}`}
@@ -878,7 +898,7 @@ const ManageDocuments = () => {
                                     if (uploading) return;
                                     setIsUploadModalOpen(false);
                                     setFile(null);
-                                    setAgencyId('');
+                                    setAgencyId((userRole === 'focal_person' || userRole === 'focal') ? userAgencyId : '');
                                 }}
                                 className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={uploading}

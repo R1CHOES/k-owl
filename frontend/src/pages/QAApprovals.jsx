@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { FileText, CheckCircle, Clock, Loader2, X, ClipboardCheck, Eye, Link as LinkIcon, Sparkles, Download, Edit, Save } from 'lucide-react';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
+import { useNavigate } from 'react-router-dom';
 
 const QAApprovals = () => {
+    const navigate = useNavigate();
     // Data State
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -20,13 +22,43 @@ const QAApprovals = () => {
     const secondaryCyan = '#11B4D4';
 
     useEffect(() => {
+        const currentUserRole = localStorage.getItem('role') || '';
+        const globalRoles = ['superadmin', 'super-admin', 'kbm', 'knowledge_base_manager', 'knowledge-base-manager'];
+        const allowedRoles = ['qa', 'qa-reviewer', 'content_approver', 'content-approver', ...globalRoles];
+        if (!allowedRoles.includes(currentUserRole)) {
+            navigate('/dashboard', { replace: true });
+            return;
+        }
         fetchData();
-    }, []);
+    }, [navigate]);
 
     const fetchData = async () => {
         try {
             const docsRes = await api.get('/api/documents');
-            const pendingDocs = docsRes.data.filter(doc => doc.status === 'IN_QA');
+            
+            // 1. Safely retrieve auth context
+            const currentUserRole = localStorage.getItem('role') || '';
+            const rawAgencyId = localStorage.getItem('agencyId');
+            const currentUserAgencyId = (rawAgencyId && rawAgencyId !== 'undefined') ? parseInt(rawAgencyId, 10) : null;
+
+            // 2. The Bulletproof Scope Lock
+            let securedDocs = docsRes.data;
+            const globalRoles = ['superadmin', 'kbm', 'knowledge_base_manager'];
+
+            if (!globalRoles.includes(currentUserRole)) {
+                // strictly lock the data to their specific agency ID.
+                securedDocs = securedDocs.filter(doc => doc.agencyId === currentUserAgencyId);
+            }
+
+            // 3. QA / Content Approver Status Filtering
+            let pendingDocs = [];
+            if (currentUserRole === 'content_approver' || currentUserRole === 'content-approver') {
+                pendingDocs = securedDocs.filter(doc => doc.status === 'PENDING_APPROVAL');
+            } else if (currentUserRole === 'qa' || currentUserRole === 'qa-reviewer') {
+                pendingDocs = securedDocs.filter(doc => doc.status === 'IN_QA');
+            }
+
+            // 4. Set final state
             setDocuments(pendingDocs);
             setLoading(false);
         } catch (error) {
@@ -62,7 +94,8 @@ const QAApprovals = () => {
     const getStatusBadge = (status) => {
         switch (status) {
             case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-cyan-100 text-cyan-800 rounded-full text-[10px] font-bold animate-pulse uppercase tracking-wider">⚙️ AI Processing...</span>;
-            case 'IN_QA': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-[10px] font-bold uppercase tracking-wider">🟡 Needs QA Review</span>;
+            case 'IN_QA': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-[10px] font-bold uppercase tracking-wider">🟡 QA Review</span>;
+            case 'PENDING_APPROVAL': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-[10px] font-bold uppercase tracking-wider">🟣 Needs Final Approval</span>;
             case 'APPROVED': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold uppercase tracking-wider">✅ Approved</span>;
             case 'REJECTED': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-full text-[10px] font-bold uppercase tracking-wider">❌ Rejected</span>;
             case 'PUBLISHED': return <span className="inline-flex items-center gap-1 px-3 py-1 bg-[#11B4D4]/10 text-[#11B4D4] rounded-full text-[10px] font-bold uppercase tracking-wider">Published</span>;
@@ -139,25 +172,30 @@ const QAApprovals = () => {
     const currentItems = documents.slice(indexOfFirstItem, indexOfLastItem);
     const totalPages = Math.ceil(documents.length / itemsPerPage);
 
+    const userRole = localStorage.getItem('role') || '';
+    const isCA = userRole === 'content_approver' || userRole === 'content-approver';
+
     return (
         <div className="flex flex-col h-full space-y-6 animate-fade-in pb-8">
             <div>
-                <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                    <ClipboardCheck className="text-[#11B4D4]" size={32} /> 
-                    QA & Approvals
+                <h1 className="text-3xl font-light tracking-tight text-slate-900 flex items-center gap-3">
+                    <ClipboardCheck className="text-[#11B4D4] w-8 h-8" /> 
+                    {isCA ? 'Content Approvals' : 'QA & Approvals'}
                 </h1>
-                <p className="text-gray-500 mt-2">Review pending documents and approve them for publishing.</p>
+                <p className="text-slate-500 mt-1">
+                    {isCA ? 'Review QA-approved documents and publish them to the system.' : 'Review pending documents and approve them for publishing.'}
+                </p>
             </div>
 
             {loading ? (
                 <div className="flex justify-center p-12"><Loader2 className="animate-spin text-[#11B4D4]" size={48} /></div>
             ) : documents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-16 bg-white rounded-2xl shadow-sm border border-gray-100 mt-8">
-                    <div className="w-24 h-24 bg-[#11B4D4]/10 rounded-full flex items-center justify-center mb-6">
-                        <span className="text-5xl">🎉</span>
+                <div className="flex flex-col items-center justify-center p-16 bg-white rounded-xl border border-slate-200 mt-8">
+                    <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-4">
+                        <CheckCircle className="w-10 h-10 text-emerald-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-[#123971] mb-2">All caught up!</h2>
-                    <p className="text-gray-500 text-center max-w-md">
+                    <h2 className="text-xl font-semibold text-slate-800 mb-2">All caught up!</h2>
+                    <p className="text-slate-500 text-center max-w-md">
                         There are currently no documents waiting for QA review. Great job keeping the inbox clean!
                     </p>
                 </div>
@@ -167,7 +205,7 @@ const QAApprovals = () => {
                         {currentItems.map(doc => (
                             <div
                                 key={doc.id}
-                                className="flex flex-col justify-between min-h-[160px] p-5 bg-white border border-gray-200 rounded-xl shadow-sm w-full"
+                                className="flex flex-col justify-between min-h-[160px] p-5 bg-white border border-slate-200 rounded-xl hover:border-cyan-400 hover:shadow-sm transition-all w-full"
                             >
                                 <div className="flex justify-between items-start gap-4">
                                     <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -188,42 +226,42 @@ const QAApprovals = () => {
                                     </div>
                                 </div>
                                 
-                                <div className="flex justify-between items-center mt-auto pt-4 border-t border-gray-100">
-                                    <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                                <div className="flex justify-between items-center mt-auto pt-4 border-t border-slate-100">
+                                    <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
                                         <Clock size={14} /> {new Date(doc.createdAt).toLocaleDateString()}
                                     </div>
                                     
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setSelectedPair(doc); }}
-                                            className="p-2 text-cyan-500 hover:bg-gray-100 rounded-lg transition-colors"
-                                            title="View Organized PDF & Traceability"
+                                            className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold text-cyan-600 bg-cyan-50 hover:bg-cyan-100 rounded-lg transition-colors"
+                                            title="View Traceability"
                                         >
-                                            <Eye size={18} />
+                                            <Eye size={14} /> View
                                         </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleEditDataClick(doc); }}
-                                            className="p-2 text-purple-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                            className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
                                             title="Edit AI Data"
                                         >
-                                            <Edit size={18} />
+                                            <Edit size={14} /> Edit
                                         </button>
                                         
-                                        <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
                                         
                                         <button
-                                            onClick={() => updateDocumentStatus(doc.id, 'APPROVED')}
-                                            className="p-2 text-emerald-500 hover:bg-gray-100 rounded-lg transition-colors"
-                                            title="Approve"
+                                            onClick={() => updateDocumentStatus(doc.id, isCA ? 'APPROVED' : 'PENDING_APPROVAL')}
+                                            className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors shadow-sm"
+                                            title={isCA ? 'Publish' : 'Approve'}
                                         >
-                                            <CheckCircle size={18} />
+                                            <CheckCircle size={14} /> {isCA ? 'Publish' : 'Approve'}
                                         </button>
                                         <button
                                             onClick={() => updateDocumentStatus(doc.id, 'REJECTED')}
-                                            className="p-2 text-rose-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                            className="px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors"
                                             title="Reject"
                                         >
-                                            <X size={18} />
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 </div>

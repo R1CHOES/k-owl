@@ -132,7 +132,7 @@ const uploadDocument = async (req, res) => {
 const getAllDocuments = async (req, res) => {
     try {
         let whereClause = { isArchived: false };
-        if (req.user && req.user.roleSlug === 'agency-focal-person') {
+        if (req.user && (req.user.roleSlug === 'focal_person' || req.user.roleSlug === 'agency_admin')) {
             whereClause.agencyId = req.user.agencyId;
         }
 
