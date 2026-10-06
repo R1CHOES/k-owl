@@ -3,7 +3,6 @@ const prisma = new PrismaClient();
 const crypto = require('crypto');
 const fs = require('fs');
 const contentExtractionService = require('../services/contentExtractionService');
-const convertapi = require('convertapi')(process.env.CONVERT_API_SECRET);
 
 /**
  * Handles document upload, deduplication, and database entry creation.
@@ -14,39 +13,13 @@ const uploadDocument = async (req, res) => {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
+        console.log("=== UPLOAD RECEIVED ===");
+
         const { agencyId } = req.body;
 
         if (!agencyId) {
             fs.unlinkSync(req.file.path); // clean up file
             return res.status(400).json({ error: 'agencyId is required' });
-        }
-
-        // 0. Convert Word documents to PDF
-        if (req.file.mimetype === 'application/msword' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            try {
-                console.log(`Starting conversion for ${req.file.originalname}...`);
-                const fileExt = req.file.originalname.split('.').pop().toLowerCase();
-                const result = await convertapi.convert('pdf', { File: req.file.path }, fileExt);
-                const convertedFilePath = req.file.path + ".pdf";
-                await result.file.save(convertedFilePath);
-
-                fs.unlinkSync(req.file.path); // Delete the original .docx file
-
-                // Override req.file variables
-                req.file.path = convertedFilePath;
-                req.file.mimetype = 'application/pdf';
-                req.file.originalname = req.file.originalname.replace(/\.[^/.]+$/, "") + ".pdf";
-
-                // Update file size property
-                const stats = fs.statSync(req.file.path);
-                req.file.size = stats.size;
-
-                console.log(`Successfully converted to PDF: ${req.file.originalname}`);
-            } catch (conversionError) {
-                console.error('Document conversion failed:', conversionError);
-                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                return res.status(500).json({ error: 'Document conversion failed. Please try again.' });
-            }
         }
 
         // 1. Generate SHA-256 hash of the file to prevent duplicates
@@ -69,7 +42,9 @@ const uploadDocument = async (req, res) => {
                     data: { isArchived: false, status: 'PENDING_EXTRACTION' },
                     include: { versions: true }
                 });
-                fs.unlinkSync(req.file.path); // clean up duplicate uploaded file
+                fs.unlinkSync(req.file.path);
+
+
 
                 // Hook into the CMS Pipeline for restored document to ensure PDF is generated
                 try {
@@ -93,6 +68,7 @@ const uploadDocument = async (req, res) => {
             data: {
                 agencyId: parseInt(agencyId),
                 status: 'PENDING_EXTRACTION',
+                uploadedById: req.user.userId,
                 versions: {
                     create: {
                         versionNumber: 1,
@@ -107,6 +83,8 @@ const uploadDocument = async (req, res) => {
             },
             include: { versions: true }
         });
+
+
 
         // 4. Hook into the CMS Pipeline: Automated Content Extraction
         // We DO NOT await this. It runs in the background so the frontend doesn't hang!
@@ -140,6 +118,9 @@ const getAllDocuments = async (req, res) => {
             where: whereClause,
             include: {
                 agency: true,
+                uploadedBy: true,
+                qaApprovedBy: true,
+                contentApprovedBy: true,
                 versions: {
                     include: { uploader: true, content: true },
                     orderBy: { versionNumber: 'desc' },
@@ -168,6 +149,14 @@ const updateDocument = async (req, res) => {
             ...(agencyId && { agencyId: parseInt(agencyId) }),
             ...(status && { status })
         };
+
+        if (status) {
+            if (req.user && req.user.roleSlug === 'qa') {
+                updateData.qaApprovedById = req.user.userId;
+            } else if (req.user && req.user.roleSlug === 'content_approver') {
+                updateData.contentApprovedById = req.user.userId;
+            }
+        }
 
         if (req.file) {
             // New file uploaded for replacement
@@ -277,9 +266,45 @@ const archiveDocument = async (req, res) => {
     }
 };
 
+const getDocumentById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const document = await prisma.document.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                agency: true,
+                uploadedBy: true,
+                qaApprovedBy: true,
+                contentApprovedBy: true,
+                versions: {
+                    include: { 
+                        uploader: true, 
+                        content: {
+                            include: {
+                                versions: true
+                            }
+                        } 
+                    },
+                    orderBy: { versionNumber: 'desc' }
+                }
+            }
+        });
+        
+        if (!document) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+        
+        res.json(document);
+    } catch (error) {
+        console.error('Error fetching document by ID:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 module.exports = {
     uploadDocument,
     getAllDocuments,
     updateDocument,
-    archiveDocument
+    archiveDocument,
+    getDocumentById
 };

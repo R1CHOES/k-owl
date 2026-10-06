@@ -12,6 +12,10 @@ router.post('/upload', verifyToken, upload.single('file'), documentController.up
 // Requires auth token
 router.get('/', verifyToken, documentController.getAllDocuments);
 
+// GET /api/documents/:id
+// Requires auth token
+router.get('/:id', verifyToken, documentController.getDocumentById);
+
 // PATCH /api/documents/:id
 // Requires auth token, allows optional file upload for replacement
 router.patch('/:id', verifyToken, upload.single('file'), documentController.updateDocument);

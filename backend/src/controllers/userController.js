@@ -172,9 +172,45 @@ const changeUserApprovalStatus = async (req, res) => {
     }
 };
 
+const getPendingList = async (req, res) => {
+    try {
+        const { roleSlug, agencyId } = req.user;
+        let users = [];
+
+        // RBAC Logic
+        if (roleSlug === 'superadmin') {
+            users = await prisma.user.findMany({ 
+                where: { status: 'PENDING' },
+                take: 10,
+                orderBy: { createdAt: 'desc' }
+            });
+        } else if (roleSlug === 'agency_admin' || roleSlug === 'admin') {
+            users = await prisma.user.findMany({ 
+                where: { status: 'PENDING', agencyId: agencyId },
+                take: 10,
+                orderBy: { createdAt: 'desc' }
+            });
+        } else {
+            return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
+        }
+
+        // Sanitize
+        const sanitizedUsers = users.map(user => {
+            const { passwordHash, ...safeUser } = user;
+            return safeUser;
+        });
+
+        res.json(sanitizedUsers);
+    } catch (error) {
+        console.error('Error fetching pending list:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getAllUsers,
     toggleUserStatus,
     updateUser,
-    changeUserApprovalStatus
+    changeUserApprovalStatus,
+    getPendingList
 };

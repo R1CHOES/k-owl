@@ -25,6 +25,7 @@ model Agency {
   website     String?
   bannerUrl   String?
   logoUrl     String?
+  cluster     String?
 
   users    User[]
   Document Document[]
@@ -51,6 +52,10 @@ model User {
   Document        Document[]
   DocumentVersion DocumentVersion[]
   ContentVersion  ContentVersion[]
+  
+  uploadedDocs Document[] @relation("DocUploader")
+  qaApprovedDocs Document[] @relation("DocQAApprover")
+  contentApprovedDocs Document[] @relation("DocContentApprover")
 }
 
 enum DocumentStatus {
@@ -83,6 +88,13 @@ model Document {
   updatedAt DateTime          @updatedAt
   User      User?             @relation(fields: [userId], references: [id])
   userId    Int?
+
+  uploadedById       Int?
+  uploadedBy         User?     @relation("DocUploader", fields: [uploadedById], references: [id])
+  qaApprovedById     Int?
+  qaApprovedBy       User?     @relation("DocQAApprover", fields: [qaApprovedById], references: [id])
+  contentApprovedById Int?
+  contentApprovedBy  User?     @relation("DocContentApprover", fields: [contentApprovedById], references: [id])
 }
 
 // 2. The Physical Uploaded Files

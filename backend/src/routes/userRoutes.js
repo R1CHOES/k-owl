@@ -6,6 +6,9 @@ const { verifyToken } = require('../middleware/authMiddleware');
 // GET /api/users
 router.get('/', verifyToken, userController.getAllUsers);
 
+// GET /api/users/pending-list
+router.get('/pending-list', verifyToken, userController.getPendingList);
+
 // PATCH /api/users/:id/status
 router.patch('/:id/status', verifyToken, userController.toggleUserStatus);
 

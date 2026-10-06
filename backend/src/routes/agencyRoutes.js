@@ -12,4 +12,7 @@ router.post('/', verifyToken, agencyController.createAgency);
 // PATCH /api/agencies/:id
 router.patch('/:id', verifyToken, agencyController.updateAgency);
 
+// GET /api/agencies/:id
+router.get('/:id', verifyToken, agencyController.getAgencyById);
+
 module.exports = router;

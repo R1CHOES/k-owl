@@ -4,7 +4,12 @@ const prisma = new PrismaClient();
 const getAllAgencies = async (req, res) => {
     try {
         const agencies = await prisma.agency.findMany({
-            orderBy: { name: 'asc' }
+            orderBy: { name: 'asc' },
+            include: {
+                _count: {
+                    select: { users: true, Document: true }
+                }
+            }
         });
         res.json(agencies);
     } catch (error) {
@@ -63,8 +68,40 @@ const updateAgency = async (req, res) => {
     }
 };
 
+const getAgencyById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const agency = await prisma.agency.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                        designation: true,
+                        status: true,
+                        isActive: true
+                    }
+                },
+                Document: true
+            }
+        });
+
+        if (!agency) {
+            return res.status(404).json({ error: 'Agency not found' });
+        }
+
+        res.json(agency);
+    } catch (error) {
+        console.error('Error fetching agency by ID:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 module.exports = {
     getAllAgencies,
     createAgency,
-    updateAgency
+    updateAgency,
+    getAgencyById
 };

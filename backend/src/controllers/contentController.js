@@ -47,13 +47,17 @@ const saveContentVersion = async (req, res) => {
 const updateContentMetadata = async (req, res) => {
     try {
         const { contentId } = req.params;
-        const { dynamicMetadata } = req.body;
+        const { dynamicMetadata, descriptionText } = req.body;
 
         if (!contentId) return res.status(400).json({ error: 'contentId is required' });
 
+        const dataToUpdate = {};
+        if (dynamicMetadata) dataToUpdate.dynamicMetadata = dynamicMetadata;
+        if (descriptionText !== undefined) dataToUpdate.descriptionText = descriptionText;
+
         const updatedContent = await prisma.content.update({
             where: { id: parseInt(contentId) },
-            data: { dynamicMetadata }
+            data: dataToUpdate
         });
 
         // Regenerate PDF

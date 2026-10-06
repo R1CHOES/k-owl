@@ -38,6 +38,10 @@ app.get('/', (req, res) => {
 if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`);
+        
+        // Start the background extraction queue worker
+        const extractionWorker = require('./workers/extractionWorker');
+        extractionWorker.startWorker();
     });
 }
 // Export the app so Supertest can use it
