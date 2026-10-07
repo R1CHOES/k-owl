@@ -84,7 +84,15 @@ const getAgencyById = async (req, res) => {
                         isActive: true
                     }
                 },
-                Document: true
+                Document: {
+                    include: {
+                        versions: {
+                            include: { content: true },
+                            orderBy: { versionNumber: 'desc' },
+                            take: 1
+                        }
+                    }
+                }
             }
         });
 

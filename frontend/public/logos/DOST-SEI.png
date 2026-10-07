@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/webp" href="https://seibucket.science-scholarships.ph/dost-sei-logo.svg" />
+    <title>Science Education Institute</title>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" ></script> -->
+    <link rel="stylesheet" href="/css/output.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet"/>
+  </head>
+  
+  <body class="bg-[#030A17]">
+    <!-- Loader Section -->
+    <div id="loader-container">
+      <!-- Loader goes here -->
+    </div>
+
+    <div id="background-container" class="opacity-0 pointer-events-none transition-opacity duration-700 ease-in-out">
+      <!-- Header Section -->
+      <header id="header"></header>
+      
+      <!-- Main Section -->
+      <main id="main-content" class="relative w-full min-h-screen overflow-hidden">
+        <!-- Page content will be injected here -->
+      </main>
+      
+      <!-- Footer Section -->
+      <footer id="footer"></footer>
+    </div>
+
+    <script src="/scripts/loader.js"></script>
+    <script src="/scripts/load-components.js"></script>
+    <script src="/scripts/routes.js"></script>
+    <script src="/scripts/animations.js"></script>
+  </body>
+</html>

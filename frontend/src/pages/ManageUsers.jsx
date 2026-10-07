@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, Plus, User, Mail, Briefcase, Building, Edit, UserX, UserCheck, Loader2, X } from 'lucide-react';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 
 const ManageUsers = () => {
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const targetUserId = queryParams.get('userId');
+
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
+    const [filterStatus, setFilterStatus] = useState('ALL');
     
     // Modal States
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -49,6 +55,19 @@ const ManageUsers = () => {
             }
             
             setUsers(fetchedUsers);
+            
+            // NEW: Deep-Link Auto-Selection
+            if (targetUserId) {
+                const userToSelect = fetchedUsers.find(u => u.id === parseInt(targetUserId, 10));
+                if (userToSelect) {
+                    setSelectedUser(userToSelect);
+                    setFilterStatus('PENDING'); 
+                }
+            } else if (fetchedUsers.length > 0 && !selectedUser) {
+                // Existing fallback: select the first user
+                setSelectedUser(fetchedUsers[0]);
+            }
+            
             setLoading(false);
         } catch (error) {
             console.error("Failed to fetch users", error);
@@ -75,8 +94,21 @@ const ManageUsers = () => {
         }
     };
 
+    const getUserStatus = (user) => {
+        if (user.status === 'PENDING') return 'PENDING';
+        if (!user.isActive || user.status === 'REJECTED') return 'INACTIVE';
+        return 'ACTIVE';
+    };
+
     // Derived filtered users
     const filteredUsers = users.filter(user => {
+        // Status filter
+        if (filterStatus !== 'ALL') {
+            const userStatus = getUserStatus(user);
+            if (userStatus !== filterStatus) return false;
+        }
+
+        // Search query filter
         if (!searchQuery) return true;
         const lowerQuery = searchQuery.toLowerCase();
         return (
@@ -292,20 +324,20 @@ const ManageUsers = () => {
                         <div className="p-8 flex flex-col items-center border-b border-gray-100 relative">
                             {/* Status Dot */}
                             <div className="absolute top-6 right-6 flex flex-col gap-2">
-                                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                                    <div className={`w-2.5 h-2.5 rounded-full ${selectedUser.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`}></div>
-                                    <span className={`text-xs font-bold ${selectedUser.isActive ? 'text-green-600' : 'text-red-600'}`}>
-                                        {selectedUser.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                {getUserStatus(selectedUser) === 'ACTIVE' && (
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> ACTIVE
                                     </span>
-                                </div>
-                                {selectedUser.status && (
-                                    <div className={`flex items-center justify-center px-3 py-1.5 rounded-full border text-[10px] font-bold tracking-wider ${
-                                        selectedUser.status === 'APPROVED' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
-                                        selectedUser.status === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-600' :
-                                        'bg-amber-50 border-amber-100 text-amber-600'
-                                    }`}>
-                                        {selectedUser.status}
-                                    </div>
+                                )}
+                                {getUserStatus(selectedUser) === 'PENDING' && (
+                                    <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span> PENDING
+                                    </span>
+                                )}
+                                {getUserStatus(selectedUser) === 'INACTIVE' && (
+                                    <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 bg-gray-500 rounded-full"></span> INACTIVE
+                                    </span>
                                 )}
                             </div>
 
@@ -395,31 +427,49 @@ const ManageUsers = () => {
             {/* RIGHT PANEL: List View (2/3) */}
             <div className="w-full lg:w-2/3 bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
                 {/* Toolbar */}
-                <div className="px-8 py-6 border-b border-gray-100 bg-white flex justify-between items-center">
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-800">User Directory</h2>
-                        <p className="text-sm text-gray-500 font-medium mt-1">Manage system access and roles</p>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        <div className="relative w-64">
-                            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                            <input 
-                                type="text" 
-                                value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                placeholder="Search by name, email..." 
-                                className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:border-transparent transition-all font-medium text-sm"
-                                style={{ '--tw-ring-color': secondaryCyan }}
-                            />
+                <div className="px-8 py-6 border-b border-gray-100 bg-white flex flex-col gap-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800">User Directory</h2>
+                            <p className="text-sm text-gray-500 font-medium mt-1">Manage system access and roles</p>
                         </div>
-                        <button 
-                            onClick={handleAddClick}
-                            className="flex items-center gap-2 px-5 py-2.5 text-white font-bold rounded-xl shadow-lg transition-transform hover:-translate-y-0.5 active:translate-y-0"
-                            style={{ backgroundColor: secondaryCyan, boxShadow: `0 10px 20px -5px ${secondaryCyan}60` }}
-                        >
-                            <Plus size={18} strokeWidth={3} /> Add User
-                        </button>
+                        
+                        <div className="flex items-center gap-4">
+                            <div className="relative w-64">
+                                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                    placeholder="Search by name, email..." 
+                                    className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:border-transparent transition-all font-medium text-sm"
+                                    style={{ '--tw-ring-color': secondaryCyan }}
+                                />
+                            </div>
+                            <button 
+                                onClick={handleAddClick}
+                                className="flex items-center gap-2 px-5 py-2.5 text-white font-bold rounded-xl shadow-lg transition-transform hover:-translate-y-0.5 active:translate-y-0"
+                                style={{ backgroundColor: secondaryCyan, boxShadow: `0 10px 20px -5px ${secondaryCyan}60` }}
+                            >
+                                <Plus size={18} strokeWidth={3} /> Add User
+                            </button>
+                        </div>
+                    </div>
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-2 mt-2">
+                        {['ALL', 'ACTIVE', 'PENDING', 'INACTIVE'].map(status => (
+                            <button
+                                key={status}
+                                onClick={() => { setFilterStatus(status); setCurrentPage(1); }}
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                                    filterStatus === status 
+                                    ? 'bg-[#11B4D4]/10 text-[#11B4D4]' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                            >
+                                {status.charAt(0) + status.slice(1).toLowerCase()}
+                            </button>
+                        ))}
                     </div>
                 </div>
 

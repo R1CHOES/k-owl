@@ -5,6 +5,23 @@ import api from '../utils/api';
 import { jwtDecode } from 'jwt-decode';
 
 const DashboardOverview = () => {
+    const getRoleTitle = (role) => {
+        const titles = {
+            'superadmin': 'Super Admin',
+            'agency_admin': 'Agency Admin',
+            'focal_person': 'Focal Person',
+            'focal': 'Focal Person',
+            'agency-focal-person': 'Focal Person',
+            'kbm': 'Knowledge Base Manager',
+            'knowledge_base_manager': 'Knowledge Base Manager',
+            'content_approver': 'Content Approver',
+            'content-approver': 'Content Approver',
+            'qa': 'QA Reviewer',
+            'qa-reviewer': 'QA Reviewer'
+        };
+        return titles[role.toLowerCase()] || role;
+    };
+
     const userRole = localStorage.getItem('role') || 'superadmin';
     const userAgencyId = localStorage.getItem('agencyId');
     
@@ -79,7 +96,7 @@ const DashboardOverview = () => {
     return (
         <div className="flex flex-col h-full animate-fade-in space-y-8">
             <div>
-                <h1 className="text-3xl font-light tracking-tight text-slate-900">Welcome back, <span className="font-bold text-[#123971]">{username}</span></h1>
+                <h1 className="text-3xl font-light tracking-tight text-slate-900">Welcome back, <span className="font-bold text-[#123971]">{getRoleTitle(userRole)}</span></h1>
                 <p className="text-slate-500 mt-2">Here is a quick overview of your system's current status and activity.</p>
             </div>
 
@@ -130,9 +147,9 @@ const DashboardOverview = () => {
                             <h2 className="text-5xl font-light tracking-tight text-slate-900">{totalDocs}</h2>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
-                            <div className="flex items-center justify-between w-full">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Pending Approval</p>
+                        <div onClick={() => navigate(`/${userRole}/documents`)} className="cursor-pointer hover:border-amber-400 bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
+                                <div className="flex items-center justify-between w-full">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Pending Approval</p>
                                 <div className="w-10 h-10 rounded-full flex items-center justify-center bg-amber-50 text-amber-500">
                                     <AlertCircle size={20} />
                                 </div>
@@ -140,9 +157,9 @@ const DashboardOverview = () => {
                             <h2 className="text-5xl font-light tracking-tight text-slate-900">{pendingDocs.length}</h2>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
-                            <div className="flex items-center justify-between w-full">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Needs Revision</p>
+                        <div onClick={() => navigate(`/${userRole}/documents`)} className="cursor-pointer hover:border-rose-400 bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
+                                <div className="flex items-center justify-between w-full">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Needs Revision</p>
                                 <div className="w-10 h-10 rounded-full flex items-center justify-center bg-rose-50 text-rose-500">
                                     <AlertCircle size={20} />
                                 </div>
@@ -152,9 +169,9 @@ const DashboardOverview = () => {
                     </>
                 ) : (
                     <>
-                        <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
-                            <div className="flex items-center justify-between w-full">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Documents</p>
+                        <div onClick={() => navigate(`/${userRole}/documents`)} className="cursor-pointer hover:border-[#11B4D4] bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
+                                <div className="flex items-center justify-between w-full">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Documents</p>
                                 <div className="w-10 h-10 rounded-full flex items-center justify-center bg-cyan-50 text-[#11B4D4]">
                                     <FileText size={20} />
                                 </div>
@@ -162,9 +179,9 @@ const DashboardOverview = () => {
                             <h2 className="text-5xl font-light tracking-tight text-slate-900">{totalDocs}</h2>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
-                            <div className="flex items-center justify-between w-full">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Pending QA</p>
+                        <div onClick={() => navigate(`/${userRole}/qa-approvals`)} className="cursor-pointer hover:border-amber-400 bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
+                                <div className="flex items-center justify-between w-full">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Pending QA</p>
                                 <div className="w-10 h-10 rounded-full flex items-center justify-center bg-amber-50 text-amber-500">
                                     <AlertCircle size={20} />
                                 </div>
@@ -172,9 +189,9 @@ const DashboardOverview = () => {
                             <h2 className="text-5xl font-light tracking-tight text-slate-900">{pendingDocs.length}</h2>
                         </div>
 
-                        <div className="bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
-                            <div className="flex items-center justify-between w-full">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Approved & Ready</p>
+                        <div onClick={() => navigate(`/${userRole}/documents`)} className="cursor-pointer hover:border-emerald-400 bg-white rounded-xl border border-slate-200 p-6 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200">
+                                <div className="flex items-center justify-between w-full">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Approved & Ready</p>
                                 <div className="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-500">
                                     <CheckCircle size={20} />
                                 </div>
@@ -217,15 +234,15 @@ const DashboardOverview = () => {
                                                 <FileText className="w-5 h-5 text-slate-400 group-hover:text-[#11B4D4] transition-colors" />
                                             </div>
                                             <div>
-                                                <h4 className="font-semibold text-slate-800">{doc.title || doc.filename || 'Untitled Document'}</h4>
-                                                <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">{doc.summary || 'Pending review'}</p>
+                                                <h4 className="font-semibold text-slate-800">{doc.versions?.[0]?.content?.dynamicMetadata?.["Document Info"]?.["Title"] || doc.versions?.[0]?.filename || 'Untitled Document'}</h4>
+                                                <p className="text-sm text-slate-500 mt-0.5 line-clamp-1">Uploaded by: {doc.agency?.name || 'System'} | Date: {new Date(doc.createdAt).toLocaleDateString()}</p>
                                             </div>
                                         </div>
                                         <button 
-                                            onClick={() => navigate('/qa-approvals')}
-                                            className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
+                                            onClick={() => navigate(`/${userRole}/qa-approvals`)}
+                                            className="shrink-0 flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm cursor-pointer"
                                         >
-                                            Go to Inbox
+                                            Review Document
                                             <ArrowRight className="w-4 h-4" />
                                         </button>
                                     </li>

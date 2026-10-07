@@ -24,4 +24,7 @@ router.patch('/:id', verifyToken, upload.single('file'), documentController.upda
 // Requires auth token, soft deletes document
 router.patch('/:id/archive', verifyToken, documentController.archiveDocument);
 
+// POST /api/documents/:id/reviews
+router.post('/:id/reviews', verifyToken, documentController.addReview);
+
 module.exports = router;

@@ -32,12 +32,12 @@ model Agency {
 }
 
 model User {
-  id           Int     @id @default(autoincrement())
-  username     String  @unique
-  email        String  @unique
+  id           Int           @id @default(autoincrement())
+  username     String        @unique
+  email        String        @unique
   passwordHash String // We will encrypt passwords using bcrypt
   designation  String? // e.g., "Senior Science Research Specialist"
-  isActive     Boolean @default(true) // "Soft delete" so we don't break old documents
+  isActive     Boolean       @default(true) // "Soft delete" so we don't break old documents
   status       AccountStatus @default(PENDING) // Approval workflow
 
   // Relationships
@@ -52,10 +52,12 @@ model User {
   Document        Document[]
   DocumentVersion DocumentVersion[]
   ContentVersion  ContentVersion[]
-  
-  uploadedDocs Document[] @relation("DocUploader")
-  qaApprovedDocs Document[] @relation("DocQAApprover")
-  contentApprovedDocs Document[] @relation("DocContentApprover")
+
+  uploadedDocs        Document[]      @relation("DocUploader")
+  qaApprovedDocs      Document[]      @relation("DocQAApprover")
+  contentApprovedDocs Document[]      @relation("DocContentApprover")
+  ContentReview       ContentReview[]
+  ContentRemark       ContentRemark[]
 }
 
 enum DocumentStatus {
@@ -80,21 +82,22 @@ model Document {
   agencyId Int
   agency   Agency @relation(fields: [agencyId], references: [id])
 
-  status DocumentStatus @default(PENDING_EXTRACTION)
-  isArchived Boolean @default(false)
+  status     DocumentStatus @default(PENDING_EXTRACTION)
+  isArchived Boolean        @default(false)
 
   versions  DocumentVersion[]
+  reviews   ContentReview[]
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
   User      User?             @relation(fields: [userId], references: [id])
   userId    Int?
 
-  uploadedById       Int?
-  uploadedBy         User?     @relation("DocUploader", fields: [uploadedById], references: [id])
-  qaApprovedById     Int?
-  qaApprovedBy       User?     @relation("DocQAApprover", fields: [qaApprovedById], references: [id])
+  uploadedById        Int?
+  uploadedBy          User? @relation("DocUploader", fields: [uploadedById], references: [id])
+  qaApprovedById      Int?
+  qaApprovedBy        User? @relation("DocQAApprover", fields: [qaApprovedById], references: [id])
   contentApprovedById Int?
-  contentApprovedBy  User?     @relation("DocContentApprover", fields: [contentApprovedById], references: [id])
+  contentApprovedBy   User? @relation("DocContentApprover", fields: [contentApprovedById], references: [id])
 }
 
 // 2. The Physical Uploaded Files
@@ -139,7 +142,7 @@ model Content {
   dateProcessed         DateTime?
   datePosted            DateTime?
   status                String?
-  dynamicMetadata  Json?    // This magic column will hold ALL unpredictable AI data!
+  dynamicMetadata       Json? // This magic column will hold ALL unpredictable AI data!
 
   versions  ContentVersion[]
   createdAt DateTime         @default(now())
@@ -169,5 +172,36 @@ model ContentVersion {
   editorId Int
   editor   User @relation(fields: [editorId], references: [id])
 
-  createdAt DateTime @default(now()) // "edited at"
+  createdAt DateTime        @default(now()) // "edited at"
+  reviews   ContentReview[]
+}
+
+// 5. The Review and Approval Process
+model ContentReview {
+  id         Int      @id @default(autoincrement())
+  stage      String // e.g., "QA", "CONTENT_APPROVAL"
+  decision   String // e.g., "APPROVED", "REJECTED"
+  reviewDate DateTime @default(now())
+
+  contentVersionId Int?
+  contentVersion   ContentVersion? @relation(fields: [contentVersionId], references: [id])
+  documentId       Int?
+  document         Document?       @relation(fields: [documentId], references: [id])
+
+  reviewerId Int
+  reviewer   User @relation(fields: [reviewerId], references: [id])
+
+  remarks ContentRemark[]
+}
+
+model ContentRemark {
+  id        Int      @id @default(autoincrement())
+  remark    String   @db.Text
+  createdAt DateTime @default(now())
+
+  reviewId Int
+  review   ContentReview @relation(fields: [reviewId], references: [id])
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
 }

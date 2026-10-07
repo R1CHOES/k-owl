@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MarkdownTableEditor from '../components/MarkdownTableEditor';
+import { useNavigate } from 'react-router-dom';
 import { FileText, UploadCloud, Link as LinkIcon, Building2, CheckCircle, Clock, AlertCircle, Loader2, Eye, Download, X, Edit, Sparkles, Archive, Trash, Search, Save } from 'lucide-react';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 
+
 const ManageDocuments = () => {
+    const formatCleanTitle = (title) => title ? title.replace(/\.(pdf|docx?|txt)$/i, '') : 'Unknown Document';
     const userRole = localStorage.getItem('role') || 'superadmin';
     const userAgencyId = localStorage.getItem('agencyId');
+    const navigate = useNavigate();
 
     // Form State
     const [file, setFile] = useState(null);
@@ -17,6 +22,7 @@ const ManageDocuments = () => {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+
     const [previewDoc, setPreviewDoc] = useState(null);
     const [editDoc, setEditDoc] = useState(null);
     const [editFormData, setEditFormData] = useState({ agencyId: '', status: '' });
@@ -28,6 +34,7 @@ const ManageDocuments = () => {
     const [editingContent, setEditingContent] = useState(null);
     const [aiMetadataForm, setAiMetadataForm] = useState({});
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState('library');
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -77,11 +84,21 @@ const ManageDocuments = () => {
         }
     };
 
+    const handleUpload = (e) => {
+        e.preventDefault();
+        if (file && agencyId) {
+            performUpload(file, agencyId);
+        } else if (!agencyId) {
+            Swal.fire({ icon: 'warning', title: 'Missing Agency', text: 'Please select an agency first.' });
+        }
+    };
+
     const performUpload = async (fileToUpload, targetAgencyId) => {
         setUploading(true);
+
         const formData = new FormData();
-        formData.append('file', fileToUpload);
         formData.append('agencyId', targetAgencyId);
+        formData.append('file', fileToUpload);
 
         try {
             await api.post('/api/documents/upload', formData, {
@@ -97,7 +114,7 @@ const ManageDocuments = () => {
             Swal.fire({
                 icon: 'success',
                 title: 'Upload Successful',
-                text: 'Your document has been securely uploaded and hashed.',
+                text: 'Your document has been securely uploaded and queued for background AI processing. You may close this tab.',
                 confirmButtonColor: secondaryCyan
             });
 
@@ -128,6 +145,7 @@ const ManageDocuments = () => {
 
     const handleEditSubmit = async (e) => {
         e.preventDefault();
+        setUploading(true);
 
         const formData = new FormData();
         formData.append('agencyId', editFormData.agencyId);
@@ -157,22 +175,15 @@ const ManageDocuments = () => {
                 text: error.response?.data?.error || 'An error occurred during update.',
                 confirmButtonColor: secondaryCyan
             });
+        } finally {
+            setUploading(false);
         }
     };
 
 
     const handleArchive = async (doc) => {
-        const result = await Swal.fire({
-            title: 'Archive Document?',
-            text: `Are you sure you want to archive "${doc.versions?.[0]?.filename || 'this document'}"? It will be hidden from the repository.`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#ef4444',
-            cancelButtonColor: '#9ca3af',
-            confirmButtonText: 'Yes, archive it!'
-        });
-
-        if (result.isConfirmed) {
+        const confirmed = window.confirm("Are you sure you want to delete this document?");
+        if (confirmed) {
             try {
                 await api.patch(`/api/documents/${doc.id}/archive`);
                 await fetchData();
@@ -194,43 +205,46 @@ const ManageDocuments = () => {
         return result.charAt(0).toUpperCase() + result.slice(1);
     };
 
+    const [aiDescriptionTextForm, setAiDescriptionTextForm] = useState("");
+
     const handleEditDataClick = (doc) => {
         setEditingContent(doc);
-        const metadata = doc.versions?.[0]?.content?.dynamicMetadata || {};
+        const dynamicMetadata = doc.versions?.[0]?.content?.dynamicMetadata || {};
+        const metadata = dynamicMetadata["Document Info"] || dynamicMetadata || {};
         setAiMetadataForm(JSON.parse(JSON.stringify(metadata)));
+        setAiDescriptionTextForm(doc.versions?.[0]?.content?.descriptionText || "");
     };
 
-    const handleFieldChange = (cluster, key, newValue) => {
+    const handleFieldChange = (key, newValue) => {
         setAiMetadataForm(prev => ({
             ...prev,
-            [cluster]: {
-                ...prev[cluster],
-                [key]: newValue
-            }
+            [key]: newValue
         }));
+    };
+
+
+    const handleResubmit = async (doc) => {
+        try {
+            await api.patch(`/api/documents/${doc.id}`, { status: 'IN_QA' });
+            await fetchData();
+            Swal.fire({ icon: 'success', title: 'Resubmitted to QA', text: 'The QA team has been notified.', confirmButtonColor: '#11B4D4' });
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Could not resubmit document.' });
+        }
     };
 
     const handleSaveData = async () => {
         try {
             const dataToSave = { ...aiMetadataForm };
-            for (const cluster in dataToSave) {
-                for (const key in dataToSave[cluster]) {
-                    const val = dataToSave[cluster][key];
-                    if (typeof val === 'string') {
-                        try {
-                            const parsed = JSON.parse(val);
-                            if (typeof parsed === 'object' && parsed !== null) {
-                                dataToSave[cluster][key] = parsed;
-                            }
-                        } catch (e) {
-                            // Leave as string if not valid JSON object
-                        }
-                    }
-                }
-            }
-
+            
             const contentId = editingContent.versions[0].content.id;
-            await api.patch(`/api/content/${contentId}/metadata`, { dynamicMetadata: dataToSave });
+            const fullMetadata = editingContent.versions[0].content.dynamicMetadata || {};
+            fullMetadata["Document Info"] = dataToSave;
+
+            await api.patch(`/api/content/${contentId}/metadata`, { 
+                dynamicMetadata: fullMetadata,
+                descriptionText: aiDescriptionTextForm
+            });
             Swal.fire({ icon: 'success', title: 'Data Updated', confirmButtonColor: secondaryCyan });
             setEditingContent(null);
             fetchData();
@@ -257,14 +271,14 @@ const ManageDocuments = () => {
 
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-bold border border-cyan-100 shadow-sm animate-pulse"><Loader2 size={12} className="animate-spin" /> Processing AI...</span>;
-            case 'IN_QA': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold border border-yellow-100 shadow-sm"><AlertCircle size={12} /> QA Review</span>;
-            case 'PENDING_APPROVAL': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-bold border border-purple-100 shadow-sm"><AlertCircle size={12} /> Needs Final Approval</span>;
-            case 'APPROVED': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100 shadow-sm"><CheckCircle size={12} /> Approved</span>;
-            case 'REJECTED': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-100 shadow-sm"><X size={12} /> Rejected</span>;
-            case 'PUBLISHED': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100 shadow-sm"><Eye size={12} /> Published</span>;
-            case 'DRAFT': return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-bold border border-gray-200 shadow-sm"><FileText size={12} /> Draft</span>;
-            default: return <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-bold border border-gray-200 shadow-sm">{status}</span>;
+            case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-bold border border-cyan-100 shadow-sm animate-pulse"><Loader2 size={12} className="animate-spin" /> Processing AI...</span>;
+            case 'IN_QA': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs font-bold border border-yellow-100 shadow-sm"><AlertCircle size={12} /> QA Review</span>;
+            case 'PENDING_APPROVAL': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-bold border border-purple-100 shadow-sm"><AlertCircle size={12} /> Needs Final Approval</span>;
+            case 'APPROVED': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-100 shadow-sm"><CheckCircle size={12} /> Approved</span>;
+            case 'REJECTED': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold border border-rose-100 shadow-sm"><X size={12} /> Rejected</span>;
+            case 'PUBLISHED': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold border border-blue-100 shadow-sm"><Eye size={12} /> Published</span>;
+            case 'DRAFT': return <span className="inline-flex items-center gap-2 px-4 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-bold border border-gray-200 shadow-sm"><FileText size={12} /> Draft</span>;
+            default: return <span className="inline-flex items-center gap-2 px-4 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-bold border border-gray-200 shadow-sm">{status}</span>;
         }
     };
 
@@ -282,6 +296,7 @@ const ManageDocuments = () => {
     };
 
     const filteredDocuments = documents.filter(doc => {
+        if (agencyId && doc.agencyId !== parseInt(agencyId)) return false;
         if (!searchTerm) return true;
         const searchLower = searchTerm.toLowerCase();
         const filenameMatch = doc.versions?.[0]?.filename?.toLowerCase().includes(searchLower);
@@ -302,72 +317,218 @@ const ManageDocuments = () => {
                 <p className="text-slate-500 mt-1">Upload, hash, and track source documents across agencies.</p>
             </div>
             
-            {/* Control Bar */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-200 gap-4">
-                <div className="relative w-full md:w-[400px]">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Search by filename or AI data..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all text-sm font-medium"
-                    />
+            {/* TAB HEADERS */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 gap-4 mb-6">
+                <div className="flex gap-6 overflow-x-auto w-full sm:w-auto">
+                    <button
+                        onClick={() => setActiveTab('upload')}
+                        className={`pb-3 font-bold text-sm transition-colors whitespace-nowrap ${activeTab === 'upload' ? 'border-b-2 border-[#11B4D4] text-[#11B4D4]' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <div className="flex items-center gap-2"><UploadCloud size={16} /> Upload Document</div>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('library')}
+                        className={`pb-3 font-bold text-sm transition-colors whitespace-nowrap ${activeTab === 'library' ? 'border-b-2 border-[#11B4D4] text-[#11B4D4]' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <div className="flex items-center gap-2"><FileText size={16} /> Document Library</div>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('content')}
+                        className={`pb-3 font-bold text-sm transition-colors whitespace-nowrap ${activeTab === 'content' ? 'border-b-2 border-[#11B4D4] text-[#11B4D4]' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <div className="flex items-center gap-2"><Sparkles size={16} /> Generated Contents</div>
+                    </button>
                 </div>
-                <button
-                    onClick={() => setIsUploadModalOpen(true)}
-                    className="w-full md:w-auto px-6 py-2.5 bg-[#11B4D4] text-white font-semibold rounded-lg hover:bg-cyan-500 transition-colors flex items-center justify-center gap-2"
-                >
-                    <UploadCloud size={18} /> Upload Document
-                </button>
+
+                {/* Search Bar - only show if not uploading */}
+                {activeTab !== 'upload' && (
+                    <div className="flex gap-4 w-full sm:w-auto pb-3">
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all text-sm font-medium"
+                            />
+                        </div>
+                        {['superadmin', 'kbm', 'knowledge_base_manager'].includes(userRole) && (
+                            <select
+                                value={agencyId}
+                                onChange={(e) => setAgencyId(e.target.value)}
+                                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all text-sm font-medium text-slate-600"
+                            >
+                                <option value="">All Agencies</option>
+                                {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </select>
+                        )}
+                    </div>
+                )}
             </div>
 
-            {/* Split Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Left Column: Uploaded Documents */}
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
-                        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                            <FileText className="text-cyan-500 w-5 h-5" /> Uploaded Documents
-                        </h3>
-                    </div>
-                    <div className="p-6 grid grid-cols-1 gap-4 w-full max-h-[600px] overflow-y-auto">
-                        {loading ? (
-                            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
-                        ) : currentItems.length === 0 ? (
-                            <div className="text-center text-gray-500 p-8">No documents found.</div>
-                        ) : (
-                            currentItems.map(doc => (
-                                <div
-                                    key={doc.id}
-                                    onClick={() => setSelectedPair(doc)}
-                                    className="flex flex-col justify-between h-[120px] p-4 bg-white border border-slate-200 rounded-lg hover:border-cyan-400 hover:shadow-sm cursor-pointer transition-all w-full overflow-hidden group"
+            {/* TAB CONTENTS */}
+            <div className="w-full animate-fade-in">
+                
+                {/* UPLOAD TAB */}
+                {activeTab === 'upload' && (
+                    <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative mt-8">
+                        {uploading && (
+                            <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center">
+                                <Loader2 size={48} className="text-[#11B4D4] animate-spin mb-4" />
+                                <h3 className="text-xl font-bold text-[#123971] text-center px-4">
+                                    Uploading & Queuing...
+                                </h3>
+                                <p className="text-gray-500 mt-2 font-medium text-center px-4">AI processing will continue in the background.</p>
+                            </div>
+                        )}
+                        <div className="p-8">
+                            <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2"><UploadCloud className="text-[#11B4D4]" /> Secure Document Upload</h2>
+                            
+                            <form id="uploadDocForm" onSubmit={handleUpload} className="space-y-6">
+                                {/* Agency Select */}
+                                {['superadmin', 'kbm', 'knowledge_base_manager'].includes(userRole) && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Owning Agency <span className="text-red-500">*</span></label>
+                                        <select
+                                            value={agencyId}
+                                            onChange={(e) => setAgencyId(e.target.value)}
+                                            required
+                                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all"
+                                        >
+                                            <option value="">-- Select Agency --</option>
+                                            {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {/* File Dropzone */}
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Select File <span className="text-red-500">*</span></label>
+                                    <div
+                                        className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer transition-all ${file ? 'border-[#11B4D4] bg-[#11B4D4]/5' : 'border-gray-300 hover:border-[#11B4D4] hover:bg-gray-50'}`}
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
+                                            }}
+                                            className="hidden"
+                                            required
+                                            accept=".pdf,.doc,.docx,.txt"
+                                        />
+                                        {file ? (
+                                            <div className="flex flex-col items-center text-center">
+                                                <FileText size={48} className="text-[#11B4D4] mb-4" />
+                                                <p className="font-bold text-gray-800 text-lg">{file.name}</p>
+                                                <p className="text-sm text-gray-500 font-medium mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                                <p className="text-xs text-[#11B4D4] font-bold mt-4 bg-white px-3 py-1 rounded-full border border-[#11B4D4]/20 shadow-sm">Click to change file</p>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center text-center">
+                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                                    <UploadCloud size={32} className="text-gray-400" />
+                                                </div>
+                                                <p className="font-bold text-gray-800 text-lg">Click to browse or drag file here</p>
+                                                <p className="text-sm text-gray-500 font-medium mt-2">Supported formats: PDF, DOCX, TXT</p>
+                                                <p className="text-xs text-gray-400 font-medium mt-1">(Max file size: 10MB)</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={!file || !agencyId || uploading}
+                                    className={`w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 ${(!file || !agencyId || uploading) ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'hover:shadow-xl hover:-translate-y-0.5'}`}
+                                    style={(!file || !agencyId || uploading) ? {} : { backgroundColor: '#00AEEF' }}
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-start gap-3 w-full">
+                                    <UploadCloud size={20} /> Upload & Process Document
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* LIBRARY TAB */}
+                {activeTab === 'library' && (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                                <FileText className="text-[#11B4D4] w-6 h-6" /> Uploaded Documents
+                            </h3>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {loading ? (
+                                <div className="col-span-full flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
+                            ) : currentItems.length === 0 ? (
+                                <div className="col-span-full text-center text-gray-500 p-8">No documents found in library.</div>
+                            ) : (
+                                currentItems.map(doc => (
+                                    <div
+                                    key={doc.id}
+                                    className="flex flex-col justify-between p-4 bg-white border border-slate-200 rounded-lg hover:border-cyan-400 hover:shadow-sm transition-all w-full group"
+                                >
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-start gap-4 w-full">
                                             <div className="p-2 bg-cyan-50 rounded-lg group-hover:bg-cyan-100 transition-colors shrink-0">
-                                                <FileText className="text-cyan-500" size={20} />
+                                                <FileText className="text-cyan-500" size={24} />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="text-lg font-bold text-[#123971] truncate">
+                                                <h4 className="text-lg font-bold text-[#123971] truncate cursor-pointer hover:underline" onClick={() => setSelectedPair(doc)}>
                                                     {doc.versions?.[0]?.filename || 'Unknown File'}
                                                 </h4>
                                                 <p className="text-xs text-gray-500 font-medium mt-1 truncate">
-                                                    {(doc.versions?.[0]?.fileSizeBytes ? (doc.versions[0].fileSizeBytes / 1024 / 1024).toFixed(2) : 0)} MB • {doc.versions?.[0]?.uploader?.username || 'System'}
+                                                    {(doc.versions?.[0]?.fileSizeBytes ? (doc.versions[0].fileSizeBytes / 1024 / 1024).toFixed(2) : 0)} MB • {new Date(doc.createdAt).toLocaleDateString()}
                                                 </p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center mt-auto">
-                                        <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
-                                            <Clock size={14} /> {new Date(doc.createdAt).toLocaleDateString()}
+                                    
+                                    {/* Traceability Details */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-2 mb-4 bg-slate-50 p-4 sm:p-2 rounded-lg border border-slate-100">
+                                        <div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Agency</p>
+                                            <p className="text-xs font-semibold text-slate-700 truncate" title={doc.agency?.name || '-'}>{doc.agency?.name || '-'}</p>
                                         </div>
-                                        <div className="flex gap-2 items-center">
+                                        <div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Uploaded By</p>
+                                            <p className="text-xs font-semibold text-slate-700 truncate" title={doc.versions?.[0]?.uploader?.username || doc.uploadedBy?.username || 'System'}>
+                                                @{doc.versions?.[0]?.uploader?.username || doc.uploadedBy?.username || 'System'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">QA By</p>
+                                            <p className="text-xs font-semibold text-slate-700 truncate" title={doc.status === 'APPROVED' ? (doc.qaApprovedBy?.username || 'System') : (doc.qaApprovedBy?.username || '-')}>{doc.status === 'APPROVED' ? (doc.qaApprovedBy?.username || 'System') : (doc.qaApprovedBy?.username || '-')}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Approved By</p>
+                                            <p className="text-xs font-semibold text-slate-700 truncate" title={doc.status === 'APPROVED' ? (doc.contentApprovedBy?.username || 'System') : (doc.contentApprovedBy?.username || '-')}>{doc.status === 'APPROVED' ? (doc.contentApprovedBy?.username || 'System') : (doc.contentApprovedBy?.username || '-')}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap justify-between items-center mt-auto border-t border-slate-100 pt-4 gap-4">
+                                        <div className="flex items-center gap-2">
                                             {getStatusBadge(doc.status)}
-                                            
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 items-center justify-end w-full sm:w-auto">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleEditClick(doc); }}
+                                                className="px-4 py-2 text-xs font-bold text-[#123971] bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2"
+                                                title="Upload New Version"
+                                            >
+                                                <UploadCloud size={16} /> New Version
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/${userRole}/documents/${doc.id}`); }}
+                                                className="px-4 py-2 text-xs font-bold text-[#11B4D4] bg-[#11B4D4]/10 rounded-lg hover:bg-[#11B4D4]/20 transition-colors"
+                                            >
+                                                View Timeline
+                                            </button>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleArchive(doc); }}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1"
+                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-1"
                                                 title="Archive Document"
                                             >
                                                 <Trash size={16} />
@@ -375,67 +536,68 @@ const ManageDocuments = () => {
                                         </div>
                                     </div>
                                 </div>
-                            ))
-                        )}
+                                ))
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
 
-                {/* Right Column: Generated Contents */}
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
-                        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                            <Sparkles className="text-purple-500 w-5 h-5" /> Generated Contents
-                        </h3>
-                    </div>
-                    <div className="p-6 grid grid-cols-1 gap-4 w-full max-h-[600px] overflow-y-auto">
-                        {loading ? (
-                            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
-                        ) : currentItems.length === 0 ? (
-                            <div className="text-center text-gray-500 p-8">No generated content found.</div>
-                        ) : (
-                            currentItems.map(doc => {
-                                const content = doc.versions?.[0]?.content;
-                                const isPending = doc.status === 'PENDING_EXTRACTION' || !content?.dynamicMetadata;
-
-                                return (
-                                    <div
+                {/* CONTENT TAB */}
+                {activeTab === 'content' && (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+                            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                                <Sparkles className="text-purple-500 w-6 h-6" /> Generated Contents
+                            </h3>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {loading ? (
+                                <div className="col-span-full flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" size={32} /></div>
+                            ) : currentItems.length === 0 ? (
+                                <div className="col-span-full text-center text-gray-500 p-8">No generated content found.</div>
+                            ) : (
+                                currentItems.map(doc => {
+                                    const content = doc.versions?.[0]?.content;
+                                    const isPending = doc.status === 'PENDING_EXTRACTION' || !content?.dynamicMetadata;
+                                    return (
+                                        <div
                                         key={`content-${doc.id}`}
-                                        onClick={() => !isPending && setSelectedPair(doc)}
-                                        className={`flex flex-col justify-between h-[120px] p-4 bg-white border border-slate-200 rounded-lg hover:border-purple-400 hover:shadow-sm ${isPending ? 'cursor-default opacity-80' : 'cursor-pointer'} transition-all w-full overflow-hidden group relative`}
+                                        onClick={() => !isPending && handleEditDataClick(doc)}
+                                        className={`flex flex-col justify-between min-h-[160px] p-4 bg-white border border-slate-200 rounded-lg hover:border-purple-400 hover:shadow-sm ${isPending ? 'cursor-default opacity-80' : 'cursor-pointer'} transition-all w-full group relative`}
                                     >
                                         {!isPending && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleEditDataClick(doc); }}
-                                                className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors z-10"
+                                                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors z-10"
                                                 title="Edit AI Data"
                                             >
                                                 <Edit size={16} />
                                             </button>
                                         )}
-                                        <div className="flex items-start gap-3 w-full">
+                                        <div className="flex items-start gap-4 w-full">
                                             <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100 transition-colors shrink-0">
-                                                <Sparkles className="text-purple-500" size={20} />
+                                                <Sparkles className="text-purple-500" size={24} />
                                             </div>
                                             <div className="flex-1 min-w-0 pr-8">
                                                 <h4 className="text-lg font-bold text-[#123971] truncate">
-                                                    {content?.title || 'AI Document'}
+                                                    {formatCleanTitle(content?.title || doc.versions?.[0]?.filename || 'AI Document')}
                                                 </h4>
                                                 {isPending ? (
                                                     <div className="mt-2">
-                                                        <span className="inline-flex items-center gap-2 px-3 py-1 bg-cyan-100 text-cyan-800 rounded-full text-xs font-bold animate-pulse">
+                                                        <span className="inline-flex items-center gap-2 px-4 py-1 bg-cyan-100 text-cyan-800 rounded-full text-xs font-bold animate-pulse">
                                                             ⚙️ AI is organizing this document...
                                                         </span>
                                                     </div>
                                                 ) : (
                                                     <p className="text-sm text-gray-600 mt-1 truncate">
-                                                        {content?.descriptionText || 'Content generated.'}
+                                                        {(content?.descriptionText && (content.descriptionText.includes('| ---') || content.descriptionText.trim().startsWith('|'))) ? 'Structured Data Table Generated' : (content?.descriptionText || 'Content generated.')}
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
                                         {!isPending && content?.keywords && (
                                             <div className="flex flex-wrap gap-2 mt-auto overflow-hidden h-6">
-                                                {content.keywords.slice(0, 3).map((keyword, idx) => (
+                                                {(typeof content.keywords === 'string' ? content.keywords.split(',') : (Array.isArray(content.keywords) ? content.keywords : [])).slice(0, 3).map((keyword, idx) => (
                                                     <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md text-[10px] font-bold tracking-wide uppercase">
                                                         {keyword}
                                                     </span>
@@ -448,14 +610,16 @@ const ManageDocuments = () => {
                                             </div>
                                         )}
                                     </div>
-                                );
-                            })
-                        )}
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
-            {/* PAGINATION CONTROLS */}
+
+{/* PAGINATION CONTROLS */}
             {totalPages > 1 && (
                 <div className="flex justify-center items-center gap-2 pt-4">
                     <button
@@ -498,10 +662,10 @@ const ManageDocuments = () => {
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
                             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 truncate pr-4">
-                                <FileText size={20} className="text-[#11B4D4] flex-shrink-0" />
+                                <FileText size={24} className="text-[#11B4D4] flex-shrink-0" />
                                 <span className="truncate">{previewDoc.versions?.[0]?.filename || 'Preview'}</span>
                             </h2>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-4">
                                 <a
                                     href={fileUrl}
                                     download={previewDoc.versions?.[0]?.filename || 'document'}
@@ -514,7 +678,7 @@ const ManageDocuments = () => {
                                     onClick={() => setPreviewDoc(null)}
                                     className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors ml-2"
                                 >
-                                    <X size={20} />
+                                    <X size={24} />
                                 </button>
                             </div>
                         </div>
@@ -537,14 +701,14 @@ const ManageDocuments = () => {
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 flex flex-col">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
                             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                <Edit size={20} style={{ color: secondaryCyan }} />
+                                <Edit size={24} style={{ color: secondaryCyan }} />
                                 Edit Document
                             </h2>
                             <button
                                 onClick={() => setEditDoc(null)}
                                 className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
                             >
-                                <X size={20} />
+                                <X size={24} />
                             </button>
                         </div>
 
@@ -611,11 +775,11 @@ const ManageDocuments = () => {
                             </form>
                         </div>
 
-                        <div className="p-6 pt-4 border-t border-gray-100 bg-gray-50 flex gap-3">
-                            <button type="button" onClick={() => setEditDoc(null)} className="flex-1 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors">
+                        <div className="p-6 pt-4 border-t border-gray-100 bg-gray-50 flex gap-4">
+                            <button type="button" onClick={() => setEditDoc(null)} className="flex-1 py-2 bg-white border-2 border-[#123971]/10 hover:border-[#123971]/30 hover:bg-slate-50 text-[#123971] font-bold rounded-xl transition-colors">
                                 Cancel
                             </button>
-                            <button type="submit" form="editDocForm" className="flex-1 py-2.5 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all" style={{ backgroundColor: secondaryCyan }}>
+                            <button type="submit" form="editDocForm" className="flex-1 py-2 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all" style={{ backgroundColor: secondaryCyan }}>
                                 Save Changes
                             </button>
                         </div>
@@ -630,10 +794,10 @@ const ManageDocuments = () => {
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
                             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 truncate pr-4">
-                                <Sparkles size={20} className="text-purple-600 flex-shrink-0" />
+                                <Sparkles size={24} className="text-purple-600 flex-shrink-0" />
                                 <span className="truncate">Organized PDF: {organizedDoc.versions?.[0]?.filename || 'Report'}</span>
                             </h2>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-4">
                                 <a
                                     href={getReportUrl(organizedDoc)}
                                     download={getReportFileName(organizedDoc)}
@@ -646,7 +810,7 @@ const ManageDocuments = () => {
                                     onClick={() => setOrganizedDoc(null)}
                                     className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors ml-2"
                                 >
-                                    <X size={20} />
+                                    <X size={24} />
                                 </button>
                             </div>
                         </div>
@@ -680,7 +844,7 @@ const ManageDocuments = () => {
                                 onClick={() => setSelectedPair(null)}
                                 className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors bg-white shadow-sm border border-gray-200"
                             >
-                                <X size={20} />
+                                <X size={24} />
                             </button>
                         </div>
 
@@ -688,9 +852,9 @@ const ManageDocuments = () => {
                         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2 bg-gray-100">
                             {/* Left: Original Upload */}
                             <div className="p-4 flex flex-col border-r border-gray-200">
-                                <div className="mb-3 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
+                                <div className="mb-4 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
                                     <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                        <FileText size={18} className="text-cyan-500" /> Original Uploaded PDF
+                                        <FileText size={16} className="text-cyan-500" /> Original Uploaded PDF
                                     </h3>
                                     <span className="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded truncate max-w-[200px]">
                                         {selectedPair.versions?.[0]?.filename}
@@ -705,16 +869,16 @@ const ManageDocuments = () => {
 
                             {/* Right: AI Generated Report */}
                             <div className="p-4 flex flex-col">
-                                <div className="mb-3 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
+                                <div className="mb-4 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
                                     <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                        <Sparkles size={18} className="text-purple-500" /> AI Organized Report
+                                        <Sparkles size={16} className="text-purple-500" /> AI Organized Report
                                     </h3>
                                     <a
                                         href={getReportUrl(selectedPair)}
                                         download={getReportFileName(selectedPair)}
-                                        className="text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-600 px-3 py-1 rounded transition-colors flex items-center gap-1"
+                                        className="text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-600 px-4 py-1 rounded transition-colors flex items-center gap-1"
                                     >
-                                        <Download size={14} /> Download
+                                        <Download size={16} /> Download
                                     </a>
                                 </div>
                                 <iframe
@@ -736,7 +900,7 @@ const ManageDocuments = () => {
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <div>
                                 <h2 className="text-xl font-bold text-[#123971] flex items-center gap-2">
-                                    <Edit size={20} className="text-[#00AEEF]" /> Manual Data Editor
+                                    <Edit size={24} className="text-[#00AEEF]" /> Manual Data Editor
                                 </h2>
                                 <p className="text-sm text-gray-500 mt-1 font-medium">Edit the AI-extracted metadata for this document</p>
                             </div>
@@ -744,182 +908,70 @@ const ManageDocuments = () => {
                                 onClick={() => setEditingContent(null)}
                                 className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors bg-white shadow-sm border border-gray-200"
                             >
-                                <X size={20} />
+                                <X size={24} />
                             </button>
                         </div>
 
-                        {/* Body - Dynamic Form */}
                         <div className="max-h-[70vh] overflow-y-auto p-4 space-y-8">
-                            {Object.keys(aiMetadataForm).length === 0 ? (
-                                <div className="text-center text-gray-500 p-8">No AI metadata extracted yet.</div>
-                            ) : (
-                                Object.entries(aiMetadataForm).map(([clusterKey, clusterValue]) => (
-                                    <div key={clusterKey} className="flex flex-col gap-5">
-                                        <h3 className="text-lg font-extrabold text-cyan-600 border-b-2 border-cyan-100 pb-2">
-                                            {formatCamelToTitle(clusterKey)}
-                                        </h3>
-
-                                        {typeof clusterValue === 'object' && clusterValue !== null ? (
-                                            Object.entries(clusterValue).map(([fieldKey, fieldValue]) => {
-                                                const displayValue = typeof fieldValue === 'object' && fieldValue !== null
-                                                    ? JSON.stringify(fieldValue, null, 2)
-                                                    : fieldValue || '';
-
-                                                return (
-                                                    <div key={fieldKey} className="flex flex-col">
-                                                        <label className="text-sm font-bold text-gray-700 mb-1">
-                                                            {formatCamelToTitle(fieldKey)}
-                                                        </label>
-                                                        <textarea
-                                                            value={displayValue}
-                                                            onChange={(e) => handleFieldChange(clusterKey, fieldKey, e.target.value)}
-                                                            className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-800 shadow-sm resize-y whitespace-pre-wrap"
-                                                        />
-                                                    </div>
-                                                );
-                                            })
-                                        ) : (
-                                            <div className="text-sm text-gray-500">Invalid cluster format.</div>
-                                        )}
+                            <div className="flex flex-col gap-4">
+                                <h3 className="text-lg font-extrabold text-cyan-600 border-b-2 border-cyan-100 pb-2">
+                                    Document Metadata
+                                </h3>
+                                {Object.keys(aiMetadataForm).length === 0 ? (
+                                    <div className="text-sm text-gray-500">No metadata found.</div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {Object.entries(aiMetadataForm).map(([fieldKey, fieldValue]) => (
+                                            <div key={fieldKey} className="flex flex-col">
+                                                <label className="text-sm font-bold text-gray-700 mb-1">
+                                                    {formatCamelToTitle(fieldKey)}
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={fieldValue || ''}
+                                                    onChange={(e) => handleFieldChange(fieldKey, e.target.value)}
+                                                    className="w-full p-4 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-800 shadow-sm"
+                                                />
+                                            </div>
+                                        ))}
                                     </div>
-                                ))
-                            )}
+                                )}
+                            </div>
+
+                            <div className="flex flex-col gap-4">
+                                <h3 className="text-lg font-extrabold text-cyan-600 border-b-2 border-cyan-100 pb-2">
+                                    Extracted Content Body
+                                </h3>
+                                <div className="flex flex-col">
+                                    <label className="text-sm font-bold text-gray-700 mb-1">
+                                        Body Text (Markdown supported)
+                                    </label>
+                                    <MarkdownTableEditor markdownText={aiDescriptionTextForm} setMarkdownText={setAiDescriptionTextForm} />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Footer */}
-                        <div className="p-6 pt-4 border-t border-gray-100 bg-white flex justify-end gap-3">
+                        <div className="p-6 pt-4 border-t border-gray-100 bg-white flex justify-end gap-4">
                             <button
                                 onClick={() => setEditingContent(null)}
-                                className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-[#123971] font-bold rounded-xl transition-colors"
+                                className="px-6 py-2 bg-white border-2 border-[#123971]/10 hover:border-[#123971]/30 hover:bg-slate-50 text-[#123971] font-bold rounded-xl transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleSaveData}
-                                className="px-6 py-2.5 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                                className="px-6 py-2 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2"
                                 style={{ backgroundColor: '#00AEEF' }}
                             >
-                                <Save size={18} /> Save Changes
+                                <Save size={16} /> Save Changes
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* UPLOAD MODAL */}
-            {isUploadModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden relative">
-                        {uploading && (
-                            <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center">
-                                <Loader2 size={48} className="text-[#11B4D4] animate-spin mb-4" />
-                                <h3 className="text-xl font-bold text-[#123971]">Uploading & Processing...</h3>
-                                <p className="text-gray-500 mt-2 font-medium">Please wait while AI extracts data.</p>
-                            </div>
-                        )}
-                        
-                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                <UploadCloud className="text-[#11B4D4]" size={24} /> Upload Document
-                            </h2>
-                            <button
-                                onClick={() => {
-                                    if (uploading) return;
-                                    setIsUploadModalOpen(false);
-                                    setFile(null);
-                                    setAgencyId((userRole === 'focal_person' || userRole === 'focal' || userRole === 'agency-focal-person') ? userAgencyId : '');
-                                }}
-                                className="p-2 rounded-full hover:bg-gray-200 text-gray-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                                disabled={uploading}
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                        
-                        <div className="p-8 space-y-8 bg-white">
-                            {!(userRole === 'focal_person' || userRole === 'focal' || userRole === 'agency-focal-person') && (
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                        <Building2 size={16} className="text-gray-400" /> 1. Select Owning Agency <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        value={agencyId}
-                                        onChange={(e) => setAgencyId(e.target.value)}
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#11B4D4]/50 focus:border-[#11B4D4] transition-all font-bold text-gray-700 appearance-none cursor-pointer"
-                                        disabled={uploading}
-                                    >
-                                        <option value="" disabled>Select an Agency</option>
-                                        {agencies.map(a => (
-                                            <option key={a.id} value={a.id}>{a.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                    <FileText size={16} className="text-gray-400" /> {userRole === 'focal_person' || userRole === 'focal' ? '1.' : '2.'} Drop or Select File <span className="text-[#11B4D4] font-medium">(Auto-Uploads instantly)</span>
-                                </label>
-                                <div
-                                    className={`border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer transition-all ${agencyId ? (file ? 'border-green-500 bg-green-50 hover:bg-green-100' : 'border-[#11B4D4] bg-[#11B4D4]/5 hover:bg-[#11B4D4]/10') : 'border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed'}`}
-                                    onClick={() => agencyId ? fileInputRef.current?.click() : null}
-                                >
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        onChange={handleFileChange}
-                                        className="hidden"
-                                        accept=".pdf,.doc,.docx,.txt"
-                                        disabled={!agencyId || uploading}
-                                    />
-                                    {file ? (
-                                        <div className="flex flex-col items-center text-center">
-                                            <FileText size={56} className="text-green-500 mb-4" />
-                                            <p className="font-bold text-gray-700 text-xl">{file.name}</p>
-                                            <p className="text-sm text-gray-500 mt-2 font-medium">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                            <p className="text-xs text-green-600 font-bold mt-4">Click to change file</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center text-center">
-                                            <UploadCloud size={56} className={agencyId ? "text-[#11B4D4] mb-4 transition-transform hover:scale-110" : "text-gray-400 mb-4"} />
-                                            <p className={`font-bold text-xl ${agencyId ? 'text-[#123971]' : 'text-gray-500'}`}>
-                                                {agencyId ? 'Click or drag file to select' : 'Select agency first'}
-                                            </p>
-                                            <p className="text-sm text-gray-500 mt-2 font-medium">Supports PDF, DOCX, TXT up to 50MB</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                            <button
-                                onClick={() => {
-                                    if (uploading) return;
-                                    setIsUploadModalOpen(false);
-                                    setFile(null);
-                                    setAgencyId((userRole === 'focal_person' || userRole === 'focal') ? userAgencyId : '');
-                                }}
-                                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={uploading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => file && agencyId && performUpload(file, agencyId)}
-                                disabled={uploading || !file || !agencyId}
-                                className={`px-6 py-2.5 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2 ${uploading || !file || !agencyId ? 'opacity-60 cursor-not-allowed bg-gray-400' : 'hover:shadow-lg hover:-translate-y-0.5 bg-[#11B4D4]'}`}
-                            >
-                                {uploading ? (
-                                    <><Loader2 size={18} className="animate-spin" /> Uploading...</>
-                                ) : (
-                                    <><UploadCloud size={18} /> Upload Document</>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            
         </div>
     );
 };

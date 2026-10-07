@@ -125,6 +125,10 @@ const getAllDocuments = async (req, res) => {
                     include: { uploader: true, content: true },
                     orderBy: { versionNumber: 'desc' },
                     take: 1
+                },
+                reviews: {
+                    include: { remarks: { include: { user: true } } },
+                    orderBy: { reviewDate: 'desc' }
                 }
             },
             orderBy: { createdAt: 'desc' }
@@ -163,23 +167,20 @@ const updateDocument = async (req, res) => {
             if (req.file.mimetype === 'application/msword' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                 try {
                     console.log(`Starting conversion for ${req.file.originalname}...`);
+                    const convertapi = require('convertapi')(process.env.CONVERTAPI_SECRET);
                     const fileExt = req.file.originalname.split('.').pop().toLowerCase();
                     const result = await convertapi.convert('pdf', { File: req.file.path }, fileExt);
                     const convertedFilePath = req.file.path + ".pdf";
                     await result.file.save(convertedFilePath);
 
-                    fs.unlinkSync(req.file.path); // Delete the original .docx file
+                    fs.unlinkSync(req.file.path);
 
-                    // Override req.file variables
                     req.file.path = convertedFilePath;
                     req.file.mimetype = 'application/pdf';
                     req.file.originalname = req.file.originalname.replace(/\.[^/.]+$/, "") + ".pdf";
 
-                    // Update file size property
                     const stats = fs.statSync(req.file.path);
                     req.file.size = stats.size;
-
-                    console.log(`Successfully converted to PDF: ${req.file.originalname}`);
                 } catch (conversionError) {
                     console.error('Document conversion failed:', conversionError);
                     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -187,55 +188,61 @@ const updateDocument = async (req, res) => {
                 }
             }
 
+            const crypto = require('crypto');
             const fileBuffer = fs.readFileSync(req.file.path);
             const hashSum = crypto.createHash('sha256');
             hashSum.update(fileBuffer);
             const fileHash = hashSum.digest('hex');
 
-            // 1. Check for duplicates (Polite Check)
-            const existingDoc = await prisma.document.findFirst({
+            // 1. Check for duplicates in DocumentVersion
+            const existingVersion = await prisma.documentVersion.findFirst({
                 where: {
                     fileHash: fileHash,
-                    isArchived: false // Ignore files that have been sent to the archive
+                    document: { isArchived: false }
                 }
             });
 
-            if (existingDoc) {
-                // Delete the duplicate file from the hard drive to save space
-                const fs = require('fs');
-                if (fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                }
-                // Return a polite 400 error to the frontend
+            if (existingVersion) {
+                if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
                 return res.status(400).json({
                     message: "Duplicate File Detected: This document already exists in the system."
                 });
             }
 
+            // 2. Get highest version number
+            const latestVersion = await prisma.documentVersion.findFirst({
+                where: { documentId: parseInt(id) },
+                orderBy: { versionNumber: 'desc' }
+            });
+            const nextVersion = latestVersion ? latestVersion.versionNumber + 1 : 1;
 
-            // Get the old document so we can delete its physical file
-            const oldDocument = await prisma.document.findUnique({ where: { id: parseInt(id) } });
-            if (oldDocument && fs.existsSync(oldDocument.filePath)) {
-                // Delete old file from server
-                fs.unlinkSync(oldDocument.filePath);
-            }
+            // 3. Create new DocumentVersion
+            await prisma.documentVersion.create({
+                data: {
+                    documentId: parseInt(id),
+                    versionNumber: nextVersion,
+                    filename: req.file.originalname,
+                    filePath: req.file.path,
+                    fileSizeBytes: req.file.size,
+                    mimeType: req.file.mimetype,
+                    fileHash: fileHash,
+                    uploaderId: req.user.userId
+                }
+            });
 
-            // Add new file properties to update data
-            updateData = {
-                ...updateData,
-                filename: req.file.originalname,
-                filePath: req.file.path,
-                mimeType: req.file.mimetype,
-                fileSizeBytes: req.file.size,
-                fileHash: fileHash,
-            };
+            // 4. Force AI Re-extraction by resetting status
+            updateData.status = 'PENDING_EXTRACTION';
         }
 
         const updatedDocument = await prisma.document.update({
             where: { id: parseInt(id) },
             data: updateData,
             include: {
-                agency: true
+                agency: true,
+                versions: {
+                    orderBy: { versionNumber: 'desc' },
+                    take: 1
+                }
             }
         });
 
@@ -301,10 +308,48 @@ const getDocumentById = async (req, res) => {
     }
 };
 
+
+const addReview = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { stage, decision, remark } = req.body;
+        const userId = req.user.userId;
+
+        // 1. Update document status
+        const updatedDocument = await prisma.document.update({
+            where: { id: parseInt(id) },
+            data: { status: decision }
+        });
+
+        // 2. Create ContentReview and ContentRemark
+        const review = await prisma.contentReview.create({
+            data: {
+                stage: stage,
+                decision: decision,
+                documentId: parseInt(id),
+                reviewerId: userId,
+                remarks: remark ? {
+                    create: {
+                        remark: remark,
+                        userId: userId
+                    }
+                } : undefined
+            }
+        });
+
+        res.json({ document: updatedDocument, review });
+    } catch (error) {
+        console.error('Error adding review:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 module.exports = {
+
     uploadDocument,
     getAllDocuments,
     updateDocument,
     archiveDocument,
-    getDocumentById
+    getDocumentById,
+    addReview
 };

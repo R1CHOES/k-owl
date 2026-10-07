@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 import { jwtDecode } from 'jwt-decode';
+import { Eye, EyeOff } from 'lucide-react';
 
 const LoginForm = ({ secondaryCyan }) => {
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [authStatus, setAuthStatus] = useState(null); // { type: 'pending' | 'rejected' | 'error', message: '' }
 
     const handleLogin = async (e) => {
@@ -35,7 +37,7 @@ const LoginForm = ({ secondaryCyan }) => {
                 }
 
                 // Route everyone to the dashboard (the dashboard will handle role-based UI restrictions)
-                navigate('/dashboard');
+                navigate(`/${decoded.roleSlug || decoded.role}/dashboard`);
             });
 
         } catch (error) {
@@ -98,15 +100,24 @@ const LoginForm = ({ secondaryCyan }) => {
                         Forgot password?
                     </a>
                 </label>
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200"
-                    style={{ '--tw-ring-color': secondaryCyan }}
-                />
+                <div className="relative">
+                    <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        placeholder="••••••••"
+                        className="w-full pl-4 pr-12 py-3 bg-white rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200"
+                        style={{ '--tw-ring-color': secondaryCyan }}
+                    />
+                    <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                </div>
             </div>
 
             {/* Vibrant Submit Button */}

@@ -3,10 +3,31 @@ import { Search, Plus, MapPin, Globe, Edit, Loader2, X, Building2, Image as Imag
 import api from '../utils/api';
 import Swal from 'sweetalert2';
 
+const AgencyAvatar = ({ agency }) => {
+    const [imgError, setImgError] = useState(false);
+    const initials = agency.name.replace('DOST-', '').substring(0, 3);
+    
+    return (
+        <div className="w-10 h-10 rounded-full bg-[#123971] text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 border border-gray-200">
+            {agency.logoUrl && !imgError ? (
+                <img 
+                    src={agency.logoUrl} 
+                    alt={agency.name} 
+                    className="w-full h-full object-cover bg-white"
+                    onError={() => setImgError(true)}
+                />
+            ) : (
+                <span className="text-[12px]">{initials}</span>
+            )}
+        </div>
+    );
+};
+
 const ManageAgencies = () => {
     const [agencies, setAgencies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCluster, setSelectedCluster] = useState('All');
     
     // Modal States
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -49,9 +70,21 @@ const ManageAgencies = () => {
     };
 
     const filteredAgencies = agencies.filter(agency => {
-        if (!searchQuery) return true;
-        return agency.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = !searchQuery || agency.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCluster = selectedCluster === 'All' || (agency.cluster || 'Other Agencies') === selectedCluster;
+        return matchesSearch && matchesCluster;
     });
+
+    const uniqueClusters = [...new Set(agencies.map(a => a.cluster).filter(Boolean))].sort();
+    const hasOtherAgencies = agencies.some(a => !a.cluster);
+    const clusters = ['All', ...uniqueClusters, ...(hasOtherAgencies ? ['Other Agencies'] : [])];
+
+    const groupedAgencies = filteredAgencies.reduce((acc, agency) => {
+        const clusterName = agency.cluster || 'Other Agencies';
+        if (!acc[clusterName]) acc[clusterName] = [];
+        acc[clusterName].push(agency);
+        return acc;
+    }, {});
 
     const handleAddClick = () => {
         setFormData({ name: '', description: '', address: '', website: '', bannerUrl: '', logoUrl: '' });
@@ -138,106 +171,113 @@ const ManageAgencies = () => {
                     <h2 className="text-3xl font-bold text-gray-800">Manage Agencies</h2>
                     <p className="text-gray-500 mt-1">Configure and manage participating government agencies.</p>
                 </div>
-                <div className="relative w-full md:w-80">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                    <input 
-                        type="text" 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search agencies by name..." 
-                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all font-medium text-sm"
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <div className="relative w-full md:w-80">
+                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                        <input 
+                            type="text" 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search agencies by name..." 
+                            className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all font-medium text-sm"
+                            style={{ '--tw-ring-color': secondaryCyan }}
+                        />
+                    </div>
+                    <select
+                        value={selectedCluster}
+                        onChange={(e) => setSelectedCluster(e.target.value)}
+                        className="w-full md:w-48 px-4 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all font-medium text-sm text-gray-700"
                         style={{ '--tw-ring-color': secondaryCyan }}
-                    />
+                    >
+                        {clusters.map(c => (
+                            <option key={c} value={c}>{c === 'All' ? 'All Clusters' : c}</option>
+                        ))}
+                    </select>
+                    <button 
+                        onClick={handleAddClick}
+                        className="flex items-center justify-center gap-2 px-5 py-2.5 text-white font-bold rounded-xl shadow-sm transition-transform hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap"
+                        style={{ backgroundColor: secondaryCyan }}
+                    >
+                        <Plus size={18} strokeWidth={3} /> Add Agency
+                    </button>
                 </div>
             </div>
 
-            {/* Banner Card Grid Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-8">
-                {/* Add New Card */}
-                <div 
-                    onClick={handleAddClick}
-                    className="border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50/50 hover:bg-white hover:border-[#11B4D4] flex flex-col items-center justify-center min-h-[320px] cursor-pointer transition-all duration-300 group shadow-sm hover:shadow-xl"
-                >
-                    <div className="w-16 h-16 rounded-full bg-white shadow-md flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 group-hover:bg-[#11B4D4]/10">
-                        <Plus size={32} style={{ color: secondaryCyan }} />
+            {/* Official Data Table Layout */}
+            <div className="flex-1 flex flex-col mb-8 gap-8">
+                {Object.entries(groupedAgencies).length === 0 ? (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden p-12 text-center text-gray-500 font-medium">
+                        No agencies found matching your search.
                     </div>
-                    <span className="font-bold text-gray-600 group-hover:text-[#11B4D4] transition-colors text-lg">Add New Agency</span>
-                </div>
-
-                {/* Agency Cards */}
-                {filteredAgencies.map(agency => (
-                    <div key={agency.id} className="bg-white rounded-2xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col min-h-[320px] relative overflow-hidden group">
-                        
-                        {/* Banner Image (Top Half) */}
-                        <div className="relative h-32 w-full">
-                            <img 
-                                src={agency.bannerUrl || defaultBanner} 
-                                alt={`${agency.name} Banner`} 
-                                className="h-full w-full object-cover"
-                                onError={(e) => { e.target.src = defaultBanner; }}
-                            />
-                            {/* Overlay Gradient for readability */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-60"></div>
-                        </div>
-                        
-                        {/* Body (Bottom Half) */}
-                        <div className="p-5 pt-12 flex-1 flex flex-col relative bg-white">
-                            {/* Logo (Overlapping) */}
-                            <div className="absolute -top-8 left-5">
-                                {agency.logoUrl ? (
-                                    <img 
-                                        src={agency.logoUrl} 
-                                        alt={`${agency.name} Logo`} 
-                                        className="h-16 w-16 rounded-full object-cover border-4 border-white shadow-sm bg-white"
-                                        onError={(e) => {
-                                            e.target.style.display = 'none';
-                                            if(e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                        }}
-                                    />
-                                ) : null}
-                                {/* Fallback Initial Logo (shown if no logoUrl, or if img fails) */}
-                                <div 
-                                    className={`h-16 w-16 rounded-full border-4 border-white shadow-sm bg-[#123971] items-center justify-center text-xl font-bold text-white ${agency.logoUrl ? 'hidden' : 'flex'}`}
-                                >
-                                    {agency.name.charAt(0).toUpperCase()}
+                ) : (
+                    Object.entries(groupedAgencies).map(([clusterName, clusterAgencies]) => (
+                        <div key={clusterName} className="flex flex-col">
+                            <h3 className="text-xl font-bold mb-4 pb-2 border-b" style={{ color: primaryNavy, borderColor: 'rgba(18, 57, 113, 0.1)' }}>
+                                {clusterName}
+                            </h3>
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50 border-b border-gray-200">
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Agency Name</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Total Users</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Total Documents</th>
+                                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {clusterAgencies.map(agency => (
+                                                <tr key={agency.id} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <AgencyAvatar agency={agency} />
+                                                            <div>
+                                                                <div className="font-bold text-gray-900">{agency.name}</div>
+                                                                {agency.website && <a href={agency.website} target="_blank" rel="noopener noreferrer" className="text-xs text-[#11B4D4] hover:underline flex items-center gap-1 mt-0.5"><Globe size={10}/> Website</a>}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="text-sm text-gray-600 line-clamp-2 max-w-xs">{agency.description || '-'}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="inline-flex items-center justify-center px-3 py-1 text-xs font-bold text-gray-700 bg-gray-100 rounded-full border border-gray-200">
+                                                            {agency._count?.users || 0}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="inline-flex items-center justify-center px-3 py-1 text-xs font-bold text-gray-700 bg-gray-100 rounded-full border border-gray-200">
+                                                            {agency._count?.Document || 0}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex justify-end gap-2 items-center">
+                                                            <button 
+                                                                onClick={() => window.location.href = `/${localStorage.getItem('role') || 'superadmin'}/agencies/${agency.id}`}
+                                                                className="px-4 py-2 text-xs font-bold text-[#11B4D4] bg-[#11B4D4]/10 rounded-xl hover:bg-[#11B4D4]/20 transition-colors border border-[#11B4D4]/20"
+                                                            >
+                                                                View Profile
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleEditClick(agency)}
+                                                                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors border border-transparent hover:border-gray-200"
+                                                                title="Edit Agency"
+                                                            >
+                                                                <Edit size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
-                            
-                            {/* Edit Button */}
-                            <button 
-                                onClick={() => handleEditClick(agency)}
-                                className="absolute top-4 right-4 p-2 bg-gray-50 text-gray-500 hover:text-[#11B4D4] hover:bg-[#11B4D4]/10 rounded-full transition-colors opacity-0 group-hover:opacity-100 shadow-sm"
-                                title="Edit Agency"
-                            >
-                                <Edit size={16} />
-                            </button>
-
-                            <h3 className="text-xl font-bold mb-2" style={{ color: primaryNavy }}>{agency.name}</h3>
-                            
-                            <p className="text-gray-500 text-sm flex-1 line-clamp-2 leading-relaxed mb-4">
-                                {agency.description || <span className="italic text-gray-400">No description provided.</span>}
-                            </p>
-
-                            {/* Footer Icons */}
-                            <div className="pt-4 border-t border-gray-100 space-y-2 mt-auto">
-                                {agency.address && (
-                                    <div className="flex items-start gap-2 text-gray-600 text-xs font-medium">
-                                        <MapPin size={14} className="text-[#11B4D4] mt-0.5 flex-shrink-0" />
-                                        <span className="line-clamp-1" title={agency.address}>{agency.address}</span>
-                                    </div>
-                                )}
-                                {agency.website && (
-                                    <div className="flex items-center gap-2 text-gray-600 text-xs font-medium">
-                                        <Globe size={14} className="text-[#11B4D4] flex-shrink-0" />
-                                        <a href={agency.website} target="_blank" rel="noopener noreferrer" className="hover:text-[#11B4D4] hover:underline line-clamp-1">
-                                            {agency.website}
-                                        </a>
-                                    </div>
-                                )}
-                            </div>
                         </div>
-                    </div>
-                ))}
+                    ))
+                )}
             </div>
 
             {/* OVERLAYS: ADD & EDIT MODALS */}
