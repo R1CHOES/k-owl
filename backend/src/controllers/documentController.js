@@ -164,29 +164,7 @@ const updateDocument = async (req, res) => {
 
         if (req.file) {
             // New file uploaded for replacement
-            if (req.file.mimetype === 'application/msword' || req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-                try {
-                    console.log(`Starting conversion for ${req.file.originalname}...`);
-                    const convertapi = require('convertapi')(process.env.CONVERTAPI_SECRET);
-                    const fileExt = req.file.originalname.split('.').pop().toLowerCase();
-                    const result = await convertapi.convert('pdf', { File: req.file.path }, fileExt);
-                    const convertedFilePath = req.file.path + ".pdf";
-                    await result.file.save(convertedFilePath);
-
-                    fs.unlinkSync(req.file.path);
-
-                    req.file.path = convertedFilePath;
-                    req.file.mimetype = 'application/pdf';
-                    req.file.originalname = req.file.originalname.replace(/\.[^/.]+$/, "") + ".pdf";
-
-                    const stats = fs.statSync(req.file.path);
-                    req.file.size = stats.size;
-                } catch (conversionError) {
-                    console.error('Document conversion failed:', conversionError);
-                    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                    return res.status(500).json({ error: 'Document conversion failed. Please try again.' });
-                }
-            }
+            
 
             const crypto = require('crypto');
             const fileBuffer = fs.readFileSync(req.file.path);

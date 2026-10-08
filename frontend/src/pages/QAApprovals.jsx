@@ -288,18 +288,18 @@ const QAApprovals = () => {
                     <div className="flex flex-col gap-6 mt-8 w-full animate-fade-in">
                         {/* BULK ACTIONS HEADER */}
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <div className="flex items-center gap-3 w-full md:w-auto">
+                            <div className="flex items-center gap-4 w-full md:w-auto">
                                 <button 
                                     onClick={handleBulkApprove} 
                                     disabled={selectedDocIds.length === 0}
-                                    className="px-4 py-2 bg-emerald-500 text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-600 transition-colors shadow-sm"
+                                    className="px-4 py-2 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-600 transition-colors shadow-sm"
                                 >
                                     <CheckCircle size={16} className="inline mr-2"/> Approve Selected
                                 </button>
                                 <button 
                                     onClick={handleBulkReject} 
                                     disabled={selectedDocIds.length === 0}
-                                    className="px-4 py-2 bg-white border border-rose-500 text-rose-500 font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-50 transition-colors"
+                                    className="px-4 py-2 bg-white border border-rose-500 text-rose-500 font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-rose-50 transition-colors"
                                 >
                                     <X size={16} className="inline mr-2"/> Reject Selected
                                 </button>
@@ -310,7 +310,7 @@ const QAApprovals = () => {
                                     placeholder="Search documents..." 
                                     value={searchTerm}
                                     onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1);}}
-                                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
+                                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
                                 />
                                 <Search size={18} className="absolute left-3 top-2.5 text-slate-400" />
                             </div>
@@ -349,7 +349,7 @@ const QAApprovals = () => {
                                                     />
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-4">
                                                         <FileText size={20} className="text-[#11B4D4]" />
                                                         <div>
                                                             <p className="font-bold text-[#123971]">{doc.versions?.[0]?.content?.title || doc.versions?.[0]?.filename || 'Unknown'}</p>
@@ -363,17 +363,17 @@ const QAApprovals = () => {
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="relative inline-block text-left group/dropdown">
                                                         <button 
-                                                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 font-bold text-xs hover:bg-slate-50 shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 peer"
+                                                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-50 shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 peer"
                                                         >
                                                             Actions ▼
                                                         </button>
                                                         
                                                         {/* CSS-Only Dropdown */}
-                                                        <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-xl shadow-lg opacity-0 invisible peer-focus:opacity-100 peer-focus:visible hover:opacity-100 hover:visible transition-all z-20 flex flex-col overflow-hidden">
-                                                            <button onMouseDown={() => setSelectedPair(doc)} className="px-4 py-2.5 text-left hover:bg-cyan-50 text-slate-700 font-semibold text-sm flex items-center gap-3 transition-colors"><Eye size={16} className="text-cyan-500"/> View</button>
-                                                            <button onMouseDown={() => handleEditDataClick(doc)} className="px-4 py-2.5 text-left hover:bg-purple-50 text-slate-700 font-semibold text-sm flex items-center gap-3 transition-colors"><Edit size={16} className="text-purple-500"/> Quick Fix</button>
-                                                            <button onMouseDown={() => handleRejectClick(doc)} className="px-4 py-2.5 text-left hover:bg-rose-50 text-rose-600 font-semibold text-sm flex items-center gap-3 transition-colors"><X size={16} className="text-rose-500"/> Reject</button>
-                                                            <button onMouseDown={() => handleApprove(doc)} className="px-4 py-2.5 text-left hover:bg-emerald-50 text-emerald-600 font-semibold text-sm flex items-center gap-3 transition-colors border-t border-slate-100"><CheckCircle size={16} className="text-emerald-500"/> Approve</button>
+                                                        <div className="absolute right-0 mt-1 w-40 bg-white border border-slate-200 rounded-xl shadow-sm opacity-0 invisible peer-focus:opacity-100 peer-focus:visible hover:opacity-100 hover:visible transition-all z-20 flex flex-col overflow-hidden">
+                                                            <button onMouseDown={() => setSelectedPair(doc)} className="px-4 py-2 text-left hover:bg-cyan-50 text-slate-700 font-semibold text-sm flex items-center gap-4 transition-colors"><Eye size={16} className="text-cyan-500"/> View</button>
+                                                            <button onMouseDown={() => handleEditDataClick(doc)} className="px-4 py-2 text-left hover:bg-purple-50 text-slate-700 font-semibold text-sm flex items-center gap-4 transition-colors"><Edit size={16} className="text-purple-500"/> Quick Fix</button>
+                                                            <button onMouseDown={() => handleRejectClick(doc)} className="px-4 py-2 text-left hover:bg-rose-50 text-rose-600 font-semibold text-sm flex items-center gap-4 transition-colors"><X size={16} className="text-rose-500"/> Reject</button>
+                                                            <button onMouseDown={() => handleApprove(doc)} className="px-4 py-2 text-left hover:bg-emerald-50 text-emerald-600 font-semibold text-sm flex items-center gap-4 transition-colors border-t border-slate-100"><CheckCircle size={16} className="text-emerald-500"/> Approve</button>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -387,11 +387,11 @@ const QAApprovals = () => {
 
                         {/* PAGINATION CONTROLS */}
                     {totalPages > 1 && (
-                        <div className="flex justify-center items-center gap-2 pt-4">
+                        <div className="flex justify-center items-center gap-4 pt-4">
                             <button
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
-                                className="px-4 py-2 rounded-lg font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                                className="px-4 py-2 rounded-xl font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                             >
                                 Previous
                             </button>
@@ -401,7 +401,7 @@ const QAApprovals = () => {
                                     <button
                                         key={i + 1}
                                         onClick={() => setCurrentPage(i + 1)}
-                                        className={`w-10 h-10 rounded-lg font-bold text-sm transition-all shadow-sm flex items-center justify-center ${currentPage === i + 1
+                                        className={`w-10 h-10 rounded-xl font-bold text-sm transition-all shadow-sm flex items-center justify-center ${currentPage === i + 1
                                             ? 'bg-[#123971] text-white border-none'
                                             : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
                                             }`}
@@ -414,7 +414,7 @@ const QAApprovals = () => {
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
-                                className="px-4 py-2 rounded-lg font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                                className="px-4 py-2 rounded-xl font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                             >
                                 Next
                             </button>
@@ -426,11 +426,11 @@ const QAApprovals = () => {
             {/* TRACEABILITY LINK MODAL */}
             {selectedPair && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh]">
+                    <div className="bg-white rounded-xl shadow-sm w-[90vw] max-w-7xl flex flex-col overflow-hidden max-h-[95vh]">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-4">
                                     <LinkIcon size={24} className="text-cyan-500" /> Document Traceability Link
                                 </h2>
                                 <p className="text-sm text-gray-500 mt-1 font-medium">Viewing original upload and AI generated report side-by-side</p>
@@ -447,8 +447,8 @@ const QAApprovals = () => {
                         <div className="flex-1 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-2 bg-gray-100">
                             {/* Left: Original Upload */}
                             <div className="p-4 flex flex-col border-r border-gray-200">
-                                <div className="mb-4 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
-                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                <div className="mb-4 flex justify-between items-center bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-4">
                                         <FileText size={16} className="text-cyan-500" /> Original Uploaded PDF
                                     </h3>
                                     <span className="text-xs font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded truncate max-w-[200px]">
@@ -464,8 +464,8 @@ const QAApprovals = () => {
 
                             {/* Right: AI Generated Report */}
                             <div className="p-4 flex flex-col">
-                                <div className="mb-4 flex justify-between items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-100">
-                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                <div className="mb-4 flex justify-between items-center bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-4">
                                         <Sparkles size={16} className="text-purple-500" /> AI Organized Report
                                     </h3>
                                     <a
@@ -490,11 +490,11 @@ const QAApprovals = () => {
             {/* MANUAL DATA EDIT MODAL */}
             {editingContent && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
+                    <div className="bg-white rounded-xl shadow-sm w-[90vw] max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
                         {/* Header */}
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <div>
-                                <h2 className="text-xl font-bold text-[#123971] flex items-center gap-2">
+                                <h2 className="text-xl font-bold text-[#123971] flex items-center gap-4">
                                     <Edit size={24} className="text-[#00AEEF]" /> Manual Data Editor
                                 </h2>
                                 <p className="text-sm text-gray-500 mt-1 font-medium">Edit the AI-extracted metadata for this document</p>
@@ -525,7 +525,7 @@ const QAApprovals = () => {
                                                     type="text"
                                                     value={fieldValue || ''}
                                                     onChange={(e) => handleFieldChange(fieldKey, e.target.value)}
-                                                    className="w-full p-4 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-800 shadow-sm"
+                                                    className="w-full p-4 border border-gray-300 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-800 shadow-sm"
                                                 />
                                             </div>
                                         ))}
@@ -556,7 +556,7 @@ const QAApprovals = () => {
                             </button>
                             <button
                                 onClick={handleSaveData}
-                                className="px-6 py-2 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                                className="px-6 py-2 text-white font-bold rounded-xl shadow-sm hover:shadow-sm transition-all flex items-center gap-4"
                                 style={{ backgroundColor: '#00AEEF' }}
                             >
                                 <Save size={16} /> Save Changes
@@ -568,9 +568,9 @@ const QAApprovals = () => {
 {/* REJECT MODAL */}
             {isRejectModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div className="bg-white rounded-xl shadow-sm w-full max-w-md overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-4">
                                 <AlertCircle className="text-rose-500" /> Reject Document
                             </h2>
                             <button onClick={() => setIsRejectModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
@@ -580,13 +580,13 @@ const QAApprovals = () => {
                             <textarea 
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
-                                className="w-full h-32 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 outline-none resize-none"
+                                className="w-full h-32 p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 outline-none resize-none"
                                 placeholder="Explain why this document needs revision..."
                             ></textarea>
                         </div>
-                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                            <button onClick={() => setIsRejectModalOpen(false)} className="px-4 py-2 font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-                            <button onClick={submitReject} className="px-4 py-2 font-bold text-white bg-rose-500 rounded-lg hover:bg-rose-600 shadow-sm transition-colors">Submit Rejection</button>
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-4">
+                            <button onClick={() => setIsRejectModalOpen(false)} className="px-4 py-2 font-bold text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
+                            <button onClick={submitReject} className="px-4 py-2 font-bold text-white bg-rose-500 rounded-xl hover:bg-rose-600 shadow-sm transition-colors">Submit Rejection</button>
                         </div>
                     </div>
                 </div>

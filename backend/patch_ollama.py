@@ -1,4 +1,4 @@
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+﻿content = """const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const http = require('http');
 
 const AI_SCHEMA = {
@@ -50,7 +50,7 @@ const ollamaGenerate = (payload, timeoutMs) => {
 };
 
 const generateMetadata = async (markdownText, filename) => {
-    const previewText = getSmartPreview(markdownText, 8000);
+    const previewText = getSmartPreview(markdownText, 15000);
     const prompt = `You are a Metadata Extractor. Analyze this document and return the requested JSON fields. Make sure to read the entire provided text to generate an accurate summary.
 Filename: ${filename}
 
@@ -66,7 +66,7 @@ ${previewText}`;
                 stream: false,
                 format: AI_SCHEMA,
                 options: { num_ctx: 8192, num_predict: 512, temperature: 0.0 }
-            }, 5 * 60 * 1000);
+            }, 3 * 60 * 1000);
             
             const parsed = JSON.parse(data.response);
             if (!parsed.title || !parsed.summary) throw new Error("Missing required fields");
@@ -122,4 +122,7 @@ ${previewText}`;
     }
 };
 
-module.exports = { generateMetadata, organizeContentIntoTable };
+module.exports = { generateMetadata, organizeContentIntoTable };"""
+
+with open('src/extraction/ollamaClient.js', 'w', encoding='utf-8') as f:
+    f.write(content)
