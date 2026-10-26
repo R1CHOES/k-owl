@@ -21,6 +21,8 @@ const QAApprovals = () => {
     // Table states
     const [selectedDocIds, setSelectedDocIds] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
+    const [agencies, setAgencies] = useState([]);
+    const [agencyId, setAgencyId] = useState("");
 
     // Modal states
     const [selectedPair, setSelectedPair] = useState(null);
@@ -43,7 +45,11 @@ const QAApprovals = () => {
 
     const fetchData = async () => {
         try {
-            const docsRes = await api.get('/api/documents');
+            const [agenciesRes, docsRes] = await Promise.all([
+                api.get('/api/agencies'),
+                api.get('/api/documents')
+            ]);
+            setAgencies(agenciesRes.data);
             
             // 1. Safely retrieve auth context
             const currentUserRole = localStorage.getItem('role') || '';
@@ -124,14 +130,14 @@ const QAApprovals = () => {
 
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-cyan-100 text-cyan-800 rounded-full text-[10px] font-bold animate-pulse uppercase tracking-wider">⚙️ AI Processing...</span>;
-            case 'IN_QA': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-yellow-100 text-yellow-800 rounded-full text-[10px] font-bold uppercase tracking-wider">🟡 QA Review</span>;
-            case 'PENDING_APPROVAL': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-purple-100 text-purple-800 rounded-full text-[10px] font-bold uppercase tracking-wider">🟣 Needs Final Approval</span>;
-            case 'APPROVED': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold uppercase tracking-wider">✅ Approved</span>;
-            case 'REJECTED': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-red-100 text-red-800 rounded-full text-[10px] font-bold uppercase tracking-wider">❌ Rejected</span>;
-            case 'PUBLISHED': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-[#11B4D4]/10 text-[#11B4D4] rounded-full text-[10px] font-bold uppercase tracking-wider">Published</span>;
-            case 'DRAFT': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-gray-100 text-gray-700 rounded-full text-[10px] font-bold uppercase tracking-wider">Draft</span>;
-            default: return <span className="inline-flex items-center gap-1 px-4 py-1 bg-gray-100 text-gray-700 rounded-full text-[10px] font-bold uppercase tracking-wider">{status}</span>;
+            case 'PENDING_EXTRACTION': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-cyan-100 text-cyan-800 rounded-full text-[10px] font-bold animate-pulse uppercase tracking-wider whitespace-nowrap">⚙️ AI Processing...</span>;
+            case 'IN_QA': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-yellow-100 text-yellow-800 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">🟡 QA Review</span>;
+            case 'PENDING_APPROVAL': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-purple-100 text-purple-800 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">🟣 Needs Final Approval</span>;
+            case 'APPROVED': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">✅ Approved</span>;
+            case 'REJECTED': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-red-100 text-red-800 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">❌ Rejected</span>;
+            case 'PUBLISHED': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-[#11B4D4]/10 text-[#11B4D4] rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Published</span>;
+            case 'DRAFT': return <span className="inline-flex items-center gap-1 px-4 py-1 bg-gray-100 text-gray-700 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Draft</span>;
+            default: return <span className="inline-flex items-center gap-1 px-4 py-1 bg-gray-100 text-gray-700 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">{status}</span>;
         }
     };
 
@@ -245,6 +251,7 @@ const QAApprovals = () => {
     };
 
     const filteredDocuments = documents.filter(doc => {
+        if (agencyId && doc.agencyId !== parseInt(agencyId)) return false;
         if (!searchTerm) return true;
         const title = doc.versions?.[0]?.content?.title || doc.versions?.[0]?.filename || '';
         const username = doc.versions?.[0]?.uploader?.username || '';
@@ -304,15 +311,27 @@ const QAApprovals = () => {
                                     <X size={16} className="inline mr-2"/> Reject Selected
                                 </button>
                             </div>
-                            <div className="relative w-full md:w-64">
-                                <input 
-                                    type="text" 
-                                    placeholder="Search documents..." 
-                                    value={searchTerm}
-                                    onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1);}}
-                                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
-                                />
-                                <Search size={18} className="absolute left-3 top-2.5 text-slate-400" />
+                            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                                <div className="relative w-full md:w-64">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search documents..." 
+                                        value={searchTerm}
+                                        onChange={e => {setSearchTerm(e.target.value); setCurrentPage(1);}}
+                                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
+                                    />
+                                    <Search size={18} className="absolute left-3 top-2.5 text-slate-400" />
+                                </div>
+                                {['superadmin', 'kbm', 'knowledge_base_manager'].includes(localStorage.getItem('role') || '') && (
+                                    <select
+                                        value={agencyId}
+                                        onChange={(e) => setAgencyId(e.target.value)}
+                                        className="w-full sm:w-48 px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none transition-all text-slate-600 bg-white"
+                                    >
+                                        <option value="">All Agencies</option>
+                                        {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                )}
                             </div>
                         </div>
 
